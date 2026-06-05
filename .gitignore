@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+dist
+.env*
+.vercel
+*.log
+.tools
+*.tsbuildinfo
+verification-*.png
