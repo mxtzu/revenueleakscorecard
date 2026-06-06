@@ -1,5 +1,6 @@
 import Script from "next/script";
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const auditUrl = "https://t.co/Zc46iJTUX9";
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body>
         {children}
+        <Analytics />
         <Script id="audit-cta-link" strategy="afterInteractive">
           {`
             (() => {
