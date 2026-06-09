@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, Gauge, LineChart, ShieldCheck } from "lucide-react";
+import { REVENUE_LEAK_APPLICATION_URL } from "@/lib/links";
 import { trackScorecardEvent } from "@/lib/tracking";
 
 type ScorecardLandingProps = {
@@ -35,11 +36,11 @@ export function ScorecardLanding({ onStart }: ScorecardLandingProps) {
             <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </button>
           <a
-            href="https://t.co/Zc46iJTUX9"
+            href={REVENUE_LEAK_APPLICATION_URL}
             onClick={() =>
               trackScorecardEvent("audit_cta_clicked", {
                 location: "landing",
-                destination: "https://t.co/Zc46iJTUX9"
+                destination: REVENUE_LEAK_APPLICATION_URL
               })
             }
             className="inline-flex min-h-12 items-center justify-center rounded-md border border-white/12 px-5 py-3 text-sm font-semibold text-white transition hover:border-white/25 hover:bg-white/[0.05]"
