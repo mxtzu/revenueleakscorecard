@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, CalendarCheck, FileText } from "lucide-react";
+import { REVENUE_LEAK_APPLICATION_URL } from "@/lib/links";
 import { getScoreEventPayload, trackScorecardEvent } from "@/lib/tracking";
 import type { ScoreSummary } from "@/types/scorecard";
 
@@ -15,20 +16,19 @@ export function CTASection({ email, summary }: CTASectionProps) {
       ...getScoreEventPayload(summary),
       hasEmail: Boolean(email),
       location: "results",
-      destination: "https://t.co/Zc46iJTUX9"
+      destination: REVENUE_LEAK_APPLICATION_URL
     });
-    window.location.href = "https://t.co/Zc46iJTUX9";
+    window.location.href = REVENUE_LEAK_APPLICATION_URL;
   }
 
   function handleRoadmapClick() {
-    // TODO: Connect this secondary CTA to a lead magnet, CRM sequence, or download endpoint.
     trackScorecardEvent("roadmap_cta_clicked", {
       ...getScoreEventPayload(summary),
       hasEmail: Boolean(email),
-      location: "results"
+      location: "results",
+      destination: REVENUE_LEAK_APPLICATION_URL
     });
-    const subject = encodeURIComponent("30/60/90 Revenue Roadmap request");
-    window.location.href = `mailto:hello@ascendops.com?subject=${subject}`;
+    window.location.href = REVENUE_LEAK_APPLICATION_URL;
   }
 
   return (
