@@ -57,4 +57,4 @@ For Vercel, no special build settings are required. The app uses Vercel server r
 ## Integration TODOs
 
 - Add the ASCEND webhook destination or CRM endpoint in Vercel.
-- Replace the 30/60/90 roadmap mailto fallback with a lead magnet, CRM sequence, or download endpoint.
+- Connect the 30/60/90 roadmap CTA to a dedicated lead magnet or CRM sequence if needed.
