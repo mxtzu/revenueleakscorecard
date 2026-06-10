@@ -13,6 +13,31 @@ type ScorecardSubmissionRequest = {
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function getString(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function getTrackingFields(trackingContext: Record<string, unknown> | null) {
+  const utm =
+    trackingContext &&
+    typeof trackingContext.utm === "object" &&
+    trackingContext.utm !== null
+      ? (trackingContext.utm as Record<string, unknown>)
+      : {};
+
+  return {
+    utmSource: getString(utm.utm_source),
+    utmMedium: getString(utm.utm_medium),
+    utmCampaign: getString(utm.utm_campaign),
+    utmContent: getString(utm.utm_content),
+    utmTerm: getString(utm.utm_term),
+    referrer: getString(trackingContext?.referrer),
+    landingPage: getString(trackingContext?.landingPage),
+    currentPage: getString(trackingContext?.currentPage),
+    sessionId: getString(trackingContext?.sessionId)
+  };
+}
+
 export async function POST(request: NextRequest) {
   let body: ScorecardSubmissionRequest;
 
@@ -32,10 +57,36 @@ export async function POST(request: NextRequest) {
 
   const webhookUrl =
     process.env.SCORECARD_RESULTS_WEBHOOK_URL ?? process.env.SCORECARD_WEBHOOK_URL;
+  const submittedAt = new Date().toISOString();
+  const trackingContext = body.trackingContext ?? null;
+  const trackingFields = getTrackingFields(trackingContext);
+  const weakestCategoryOne = body.summary.weakestCategories[0];
+  const weakestCategoryTwo = body.summary.weakestCategories[1];
 
   const submissionPayload = {
     type: "scorecard_submission",
     email: body.email,
+    submittedAt,
+    rawScore: body.summary.rawScore,
+    scorePercentage: body.summary.percentage,
+    resultBand: body.summary.band.title,
+    weakestCategoryOne: weakestCategoryOne?.shortName ?? "",
+    weakestCategoryOneScore: weakestCategoryOne?.percentage ?? "",
+    weakestCategoryTwo: weakestCategoryTwo?.shortName ?? "",
+    weakestCategoryTwoScore: weakestCategoryTwo?.percentage ?? "",
+    ...trackingFields,
+    fields: {
+      email: body.email,
+      submittedAt,
+      rawScore: body.summary.rawScore,
+      scorePercentage: body.summary.percentage,
+      resultBand: body.summary.band.title,
+      weakestCategoryOne: weakestCategoryOne?.shortName ?? "",
+      weakestCategoryOneScore: weakestCategoryOne?.percentage ?? "",
+      weakestCategoryTwo: weakestCategoryTwo?.shortName ?? "",
+      weakestCategoryTwoScore: weakestCategoryTwo?.percentage ?? "",
+      ...trackingFields
+    },
     result: {
       rawScore: body.summary.rawScore,
       percentage: body.summary.percentage,
@@ -57,9 +108,9 @@ export async function POST(request: NextRequest) {
       }))
     },
     answers: body.answers ?? {},
-    trackingContext: body.trackingContext ?? null,
+    trackingContext,
     requestContext: getRequestContext(request.headers),
-    timestamp: new Date().toISOString()
+    timestamp: submittedAt
   };
 
   try {
