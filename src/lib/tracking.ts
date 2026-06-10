@@ -130,6 +130,7 @@ export function trackScorecardEvent(eventName: string, payload: EventPayload = {
 
 export async function submitScorecardSubmission(input: {
   email: string;
+  discordUsername: string;
   answers: AnswerMap;
   summary: ScoreSummary;
 }) {
@@ -138,6 +139,7 @@ export async function submitScorecardSubmission(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       email: input.email,
+      discordUsername: input.discordUsername,
       answers: input.answers,
       summary: input.summary,
       trackingContext: getTrackingContext()
