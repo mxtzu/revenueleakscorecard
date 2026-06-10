@@ -43,7 +43,7 @@ SCORECARD_EVENT_WEBHOOK_URL=https://your-behavior-events-webhook
 
 Use `SCORECARD_RESULTS_WEBHOOK_URL` only if completed scorecard submissions should go somewhere different from `SCORECARD_WEBHOOK_URL`.
 
-Completed scorecard submissions include flat Zapier-friendly fields for email, submitted date, total score, result band, weakest categories, UTM parameters, referrer, and landing page. They also include nested category scores, raw answers, tracking context, and basic request context. Behavior events include scorecard starts, question answers, completions, email submissions, results views, print clicks, restarts, audit CTA clicks, and roadmap CTA clicks.
+Completed scorecard submissions include flat Zapier-friendly fields for email, Discord username, submitted date, total score, result band, weakest categories, UTM parameters, referrer, and landing page. They also include nested category scores, raw answers, tracking context, and basic request context. Behavior events include scorecard starts, question answers, completions, email submissions, results views, print clicks, restarts, audit CTA clicks, and roadmap CTA clicks.
 
 Google Analytics 4 is optional. If `NEXT_PUBLIC_GA_MEASUREMENT_ID` is set, the same key events are also sent as GA4 browser events.
 
