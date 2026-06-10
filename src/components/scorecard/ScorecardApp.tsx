@@ -18,6 +18,7 @@ import type { AnswerMap, AnswerValue } from "@/types/scorecard";
 const STORAGE_KEYS = {
   answers: "ascend-revenue-leak-scorecard-answers",
   email: "ascend-revenue-leak-scorecard-email",
+  discordUsername: "ascend-revenue-leak-scorecard-discord-username",
   unlocked: "ascend-revenue-leak-scorecard-unlocked"
 };
 
@@ -28,12 +29,16 @@ export function ScorecardApp() {
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [email, setEmail] = useState("");
+  const [discordUsername, setDiscordUsername] = useState("");
   const [isUnlocked, setIsUnlocked] = useState(false);
   const hasTrackedResultsView = useRef(false);
 
   useEffect(() => {
     const storedAnswers = window.localStorage.getItem(STORAGE_KEYS.answers);
     const storedEmail = window.localStorage.getItem(STORAGE_KEYS.email);
+    const storedDiscordUsername = window.localStorage.getItem(
+      STORAGE_KEYS.discordUsername
+    );
     const storedUnlocked = window.localStorage.getItem(STORAGE_KEYS.unlocked);
 
     if (storedAnswers) {
@@ -45,6 +50,7 @@ export function ScorecardApp() {
     }
 
     if (storedEmail) setEmail(storedEmail);
+    if (storedDiscordUsername) setDiscordUsername(storedDiscordUsername);
     if (storedUnlocked === "true") setIsUnlocked(true);
   }, []);
 
@@ -55,6 +61,12 @@ export function ScorecardApp() {
   useEffect(() => {
     if (email) window.localStorage.setItem(STORAGE_KEYS.email, email);
   }, [email]);
+
+  useEffect(() => {
+    if (discordUsername) {
+      window.localStorage.setItem(STORAGE_KEYS.discordUsername, discordUsername);
+    }
+  }, [discordUsername]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEYS.unlocked, String(isUnlocked));
@@ -106,12 +118,16 @@ export function ScorecardApp() {
     }
   }
 
-  async function handleEmailSubmit(nextEmail: string) {
+  async function handleEmailSubmit(input: {
+    email: string;
+    discordUsername: string;
+  }) {
     let deliveredToCaptureEndpoint = false;
 
     try {
       const result = await submitScorecardSubmission({
-        email: nextEmail,
+        email: input.email,
+        discordUsername: input.discordUsername,
         answers,
         summary
       });
@@ -122,10 +138,12 @@ export function ScorecardApp() {
 
     trackScorecardEvent("email_submitted", {
       ...getScoreEventPayload(summary),
-      email: nextEmail,
+      email: input.email,
+      discordUsername: input.discordUsername,
       deliveredToCaptureEndpoint
     });
-    setEmail(nextEmail);
+    setEmail(input.email);
+    setDiscordUsername(input.discordUsername);
     setIsUnlocked(true);
     setView("results");
   }
@@ -136,9 +154,11 @@ export function ScorecardApp() {
     setAnswers({});
     setCurrentStep(0);
     setEmail("");
+    setDiscordUsername("");
     setIsUnlocked(false);
     window.localStorage.removeItem(STORAGE_KEYS.answers);
     window.localStorage.removeItem(STORAGE_KEYS.email);
+    window.localStorage.removeItem(STORAGE_KEYS.discordUsername);
     window.localStorage.removeItem(STORAGE_KEYS.unlocked);
     setView("landing");
   }
