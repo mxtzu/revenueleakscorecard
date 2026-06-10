@@ -1,20 +1,22 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { LockKeyhole, Mail } from "lucide-react";
+import { AtSign, LockKeyhole, Mail } from "lucide-react";
 
 type EmailCaptureProps = {
-  onSubmit: (email: string) => Promise<void>;
+  onSubmit: (input: { email: string; discordUsername: string }) => Promise<void>;
 };
 
 export function EmailCapture({ onSubmit }: EmailCaptureProps) {
   const [email, setEmail] = useState("");
+  const [discordUsername, setDiscordUsername] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedEmail = email.trim();
+    const trimmedDiscordUsername = discordUsername.trim();
     const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
 
     if (!isValid) {
@@ -22,11 +24,19 @@ export function EmailCapture({ onSubmit }: EmailCaptureProps) {
       return;
     }
 
+    if (!trimmedDiscordUsername) {
+      setError("Enter your Discord username so ASCEND can match the audit request.");
+      return;
+    }
+
     setError("");
     setIsSubmitting(true);
 
     try {
-      await onSubmit(trimmedEmail);
+      await onSubmit({
+        email: trimmedEmail,
+        discordUsername: trimmedDiscordUsername
+      });
     } catch {
       setError("Something blocked the submission. Try again in a moment.");
       setIsSubmitting(false);
@@ -66,6 +76,26 @@ export function EmailCapture({ onSubmit }: EmailCaptureProps) {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="operator@studio.com"
+                className="min-h-12 w-full rounded-md border border-white/10 bg-ink-950 py-3 pl-10 pr-3 text-white placeholder:text-slate-600"
+              />
+            </div>
+          </label>
+
+          <label className="block" htmlFor="discord-username">
+            <span className="mb-2 block text-sm font-medium text-slate-200">
+              Discord username
+            </span>
+            <div className="relative">
+              <AtSign
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+                aria-hidden="true"
+              />
+              <input
+                id="discord-username"
+                type="text"
+                value={discordUsername}
+                onChange={(event) => setDiscordUsername(event.target.value)}
+                placeholder="studiolead or studiolead#1234"
                 className="min-h-12 w-full rounded-md border border-white/10 bg-ink-950 py-3 pl-10 pr-3 text-white placeholder:text-slate-600"
               />
             </div>
