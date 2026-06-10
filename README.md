@@ -35,14 +35,15 @@ SCORECARD_WEBHOOK_URL=https://your-zapier-make-airtable-or-crm-webhook
 NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 ```
 
-`SCORECARD_WEBHOOK_URL` receives both behavior events and completed scorecard submissions. If you want separate destinations, use:
+`SCORECARD_WEBHOOK_URL` receives completed scorecard submissions for lead capture. If you want behavior events in a separate analytics workflow, use:
 
 ```text
-SCORECARD_RESULTS_WEBHOOK_URL=https://your-lead-results-webhook
 SCORECARD_EVENT_WEBHOOK_URL=https://your-behavior-events-webhook
 ```
 
-Completed scorecard submissions include email, total score, result band, weakest categories, category scores, answers, UTM parameters, referrer, page URL, and basic request context. Behavior events include scorecard starts, question answers, completions, email submissions, results views, print clicks, restarts, audit CTA clicks, and roadmap CTA clicks.
+Use `SCORECARD_RESULTS_WEBHOOK_URL` only if completed scorecard submissions should go somewhere different from `SCORECARD_WEBHOOK_URL`.
+
+Completed scorecard submissions include flat Zapier-friendly fields for email, submitted date, total score, result band, weakest categories, UTM parameters, referrer, and landing page. They also include nested category scores, raw answers, tracking context, and basic request context. Behavior events include scorecard starts, question answers, completions, email submissions, results views, print clicks, restarts, audit CTA clicks, and roadmap CTA clicks.
 
 Google Analytics 4 is optional. If `NEXT_PUBLIC_GA_MEASUREMENT_ID` is set, the same key events are also sent as GA4 browser events.
 
