@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 
 type ScorecardSubmissionRequest = {
   email?: string;
+  discordUsername?: string;
   answers?: AnswerMap;
   summary?: ScoreSummary;
   trackingContext?: Record<string, unknown> | null;
@@ -51,6 +52,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "A valid email is required." }, { status: 400 });
   }
 
+  const discordUsername = body.discordUsername?.trim();
+
+  if (!discordUsername) {
+    return NextResponse.json(
+      { ok: false, error: "A Discord username is required." },
+      { status: 400 }
+    );
+  }
+
   if (!body.summary || typeof body.summary.percentage !== "number") {
     return NextResponse.json({ ok: false, error: "Score summary is required." }, { status: 400 });
   }
@@ -66,6 +76,7 @@ export async function POST(request: NextRequest) {
   const submissionPayload = {
     type: "scorecard_submission",
     email: body.email,
+    discordUsername,
     submittedAt,
     rawScore: body.summary.rawScore,
     scorePercentage: body.summary.percentage,
@@ -77,6 +88,7 @@ export async function POST(request: NextRequest) {
     ...trackingFields,
     fields: {
       email: body.email,
+      discordUsername,
       submittedAt,
       rawScore: body.summary.rawScore,
       scorePercentage: body.summary.percentage,
