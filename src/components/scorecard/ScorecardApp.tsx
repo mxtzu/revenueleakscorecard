@@ -122,6 +122,7 @@ export function ScorecardApp() {
 
     trackScorecardEvent("email_submitted", {
       ...getScoreEventPayload(summary),
+      email: nextEmail,
       deliveredToCaptureEndpoint
     });
     setEmail(nextEmail);
