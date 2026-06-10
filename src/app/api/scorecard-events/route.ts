@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Missing eventName." }, { status: 400 });
   }
 
-  const webhookUrl = process.env.SCORECARD_EVENT_WEBHOOK_URL ?? process.env.SCORECARD_WEBHOOK_URL;
+  const webhookUrl = process.env.SCORECARD_EVENT_WEBHOOK_URL;
   const eventPayload = {
     type: "scorecard_event",
     eventName: body.eventName,
