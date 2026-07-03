@@ -1,223 +1,230 @@
 import type {
-  AnswerOption,
   CategoryConfig,
-  ResultBand,
-  ScorecardQuestion
+  ContextQuestion,
+  Question,
+  ScoredQuestion
 } from "@/types/scorecard";
 
-export const answerOptions: AnswerOption[] = [
-  { value: 0, label: "Not in place" },
-  { value: 1, label: "Weak / unclear" },
-  { value: 2, label: "Partially in place" },
-  { value: 3, label: "Mostly in place" },
-  { value: 4, label: "Strong / consistently measured" }
-];
-
+/**
+ * Canonical category order. Also the display order everywhere.
+ */
 export const categories: CategoryConfig[] = [
   {
     id: "acquisition",
-    name: "Acquisition Leak",
-    shortName: "Acquisition",
-    definition:
-      "The studio is bringing in players before confirming whether those sources produce retained, monetising users.",
-    diagnosis:
-      "You may be judging acquisition by volume instead of downstream value. More visits do not automatically mean more retained spenders.",
-    recommendedAction:
-      "Compare each source by D1 retention, payer conversion, revenue per user, and payback before scaling."
+    name: "Acquisition",
+    definition: "Paying for traffic you can't price.",
+    leak: {
+      headline:
+        "Your Acquisition Leak Is Likely Funding Sources That Never Pay Back — While Your Best One Goes Unfunded",
+      mechanism:
+        "When retained payers can't be tied back to a source, every scaling decision is priced on visit volume. That cuts both ways: spend keeps flowing to sources that never produce a payer, and the one source quietly producing them never gets doubled down on. Leaks compound — any activation or monetization gain you ship next gets judged against traffic you can't price, so you won't know if it worked."
+    }
   },
   {
     id: "activation",
-    name: "Activation Leak",
-    shortName: "Activation",
-    definition:
-      "Players arrive but fail to understand the loop, feel progress, or reach the first meaningful engagement moment quickly enough.",
-    diagnosis:
-      "Players may be entering the game before the value loop becomes clear. If the first session fails, monetisation never gets a fair chance.",
-    recommendedAction:
-      "Map the first 60 seconds and identify where players stall, leave, or fail to understand the next action."
+    name: "Activation",
+    definition: "Losing players before the game gets a fair shot.",
+    leak: {
+      headline:
+        "Your Activation Leak Is Likely Costing You Day-7 Payers Before They Ever See a Purchase Surface",
+      mechanism:
+        "Most Roblox spend doesn't happen in session one — it happens after a player has come back enough times to care. If the first session doesn't lock in a reason to return, the players who would have paid are gone before any offer gets a chance. That's why an activation leak reads as a monetization problem in the dashboard: revenue looks flat, but the loss is upstream, and more acquisition just pours players into the same hole faster."
+    }
   },
   {
-    id: "monetisation",
-    name: "Monetisation Leak",
-    shortName: "Monetisation",
-    definition:
-      "Players engage but too few convert, spend again, or understand the value of paid offers.",
-    diagnosis:
-      "Your offers may exist, but the path from engagement to first purchase may not be clear, timely, or valuable enough.",
-    recommendedAction:
-      "Review first-purchase timing, store visibility, offer ladder structure, and pricing logic."
+    id: "monetization",
+    name: "Monetization",
+    definition: "Engagement that never becomes a first purchase.",
+    leak: {
+      headline:
+        "Your Monetization Leak Is Likely Sitting in the Gap Between Engagement and the First Purchase",
+      mechanism:
+        "Players who stay but never cross into a first purchase are the most expensive audience you have — you already paid, in spend or in effort, to acquire and activate them. When the first spend moment is left to chance, payer conversion becomes a function of who happens to wander into the store. Every acquisition and activation win upstream just feeds more players into the same gap, which is how a monetization leak turns growth work into a bigger loss."
+    }
   },
   {
     id: "measurement",
-    name: "Measurement Leak",
-    shortName: "Measurement",
-    definition:
-      "The team has data, but not enough decision-ready instrumentation to know what to fix first.",
-    diagnosis:
-      "You may have dashboards without a decision system. Data only helps if it tells the team what to fix next.",
-    recommendedAction:
-      "Build a KPI tree and experiment backlog tied to retention, payer conversion, ARPPU, ARPDAU, and payback."
+    name: "Measurement",
+    definition: "Revenue moves and nobody knows why.",
+    leak: {
+      headline:
+        "Your Measurement Leak Means the Other Four Leaks Stay Invisible Until They Hit Revenue",
+      mechanism:
+        "Right now a revenue drop reaches you as a number, not a cause. Without instrumentation that separates source quality from retention from spend behaviour, every fix is a guess and every internal debate is unwinnable. Measurement is the leak that hides the others — acquisition, activation, monetization, and compounding losses all run silently behind it, which is why it's usually the most expensive one to leave open."
+    }
   },
   {
     id: "compounding",
-    name: "Compounding Leak",
-    shortName: "Compounding",
-    definition:
-      "Growth work happens in fragments, so updates, ads, creators, monetisation, and analytics do not stack into a stronger revenue system.",
-    diagnosis:
-      "Your team may be working hard in separate lanes, but the gains are not stacking into one revenue system.",
-    recommendedAction:
-      "Create a shared 30/60/90-day growth roadmap connecting live ops, monetisation, acquisition, and analytics."
+    name: "Compounding",
+    definition: "Updates that ship but never stack.",
+    leak: {
+      headline:
+        "Your Compounding Leak Is Why Hard Updates Keep Producing Flat Revenue",
+      mechanism:
+        "When updates, offers, creators, and analytics run in separate lanes, each one can individually 'work' while revenue stays flat — the gains never stack. A compounding leak doesn't show up in any single dashboard, and no single specialist owns it. It shows up over quarters, as real effort that never converts into a steeper curve."
+    }
   }
 ];
 
-export const questions: ScorecardQuestion[] = [
+export const contextQuestion: ContextQuestion = {
+  kind: "context",
+  id: "revenue_band",
+  text: "Roughly what does the game gross per month, all sources?",
+  helpText: "Robux earnings at DevEx rates plus brand deals. A rough band is fine.",
+  options: [
+    { value: "under_5k", label: "Under $5K" },
+    { value: "5k_25k", label: "$5K – $25K" },
+    { value: "25k_100k", label: "$25K – $100K" },
+    { value: "over_100k", label: "$100K+" }
+  ]
+};
+
+export const scoredQuestions: ScoredQuestion[] = [
   {
-    id: 1,
+    kind: "scored",
+    id: "acquisition",
     category: "acquisition",
-    text: "Do you know which acquisition sources bring your highest-value players, not just the cheapest visits?",
-    helpText:
-      "Look for source quality: retained players, payer conversion, revenue per user, and payback."
+    text: "Your last real traffic spike — do you know which source sent the players who stayed and paid?",
+    helpText: "Not visits. Players who were still there a week later, and spent.",
+    options: [
+      {
+        score: 3,
+        label: "Yes — we can tie retained payers back to specific sources",
+        echo: "you can tie retained payers back to specific sources"
+      },
+      {
+        score: 2,
+        label: "We track visits by source, but not what those players did after",
+        echo: "you track visits by source, but not what those players did after"
+      },
+      {
+        score: 1,
+        label: "We watch impressions and CCU — source quality is a guess",
+        echo: "you watch impressions and CCU, and source quality is a guess"
+      },
+      {
+        score: 0,
+        label: "No idea — traffic shows up or it doesn't",
+        echo: "traffic shows up or it doesn't, and you can't say from where"
+      }
+    ]
   },
   {
-    id: 2,
-    category: "acquisition",
-    text: "Do you compare retention and payer behaviour by source/channel?",
-    helpText:
-      "A channel that looks cheap can become expensive if D1/D7 retention or payer behaviour is weak."
-  },
-  {
-    id: 3,
-    category: "acquisition",
-    text: "Before increasing spend, do you know whether cold traffic can pay back?",
-    helpText:
-      "Scale with payback, not guesswork. Cold traffic should be judged against cohort quality."
-  },
-  {
-    id: 4,
+    kind: "scored",
+    id: "activation",
     category: "activation",
-    text: "Can a new player understand what to do and why it matters within the first 60 seconds?",
-    helpText:
-      "The first session should make the core loop, progress signal, and next action obvious."
+    text: "Out of every 100 new players who join, how many come back for a second session?",
+    helpText: "Day-1 retention in your Creator Dashboard. Closest band from memory is fine.",
+    options: [
+      {
+        score: 3,
+        label: "25+ — and we know which first-session moments drive it",
+        echo: "25+ of every 100 come back, and you know which first-session moments drive it"
+      },
+      {
+        score: 2,
+        label: "Somewhere in the 15–25 range",
+        echo: "somewhere between 15 and 25 of every 100 new players come back"
+      },
+      {
+        score: 1,
+        label: "Under 15",
+        echo: "fewer than 15 of every 100 new players come back for a second session"
+      },
+      {
+        score: 0,
+        label: "I'd have to check — we don't watch that number",
+        echo: "you'd have to check — second sessions aren't a number the team watches"
+      }
+    ]
   },
   {
-    id: 5,
-    category: "activation",
-    text: "Do you actively track or review where new players drop off in the first session?",
-    helpText:
-      "Activation leaks often hide inside spawn flow, tutorial friction, unclear goals, or early confusion."
+    kind: "scored",
+    id: "monetization",
+    category: "monetization",
+    text: "When does a new player first hit a real reason to spend?",
+    helpText: "A purchase surface tied to something they already want — not just a store existing.",
+    options: [
+      {
+        score: 3,
+        label: "First session — a designed moment tied to something they already want",
+        echo: "the first purchase moment is designed into the first session"
+      },
+      {
+        score: 2,
+        label: "Within the first few sessions, if they find the store",
+        echo: "players hit a spend reason within a few sessions, if they find the store"
+      },
+      {
+        score: 1,
+        label: "Whenever they open the store on their own",
+        echo: "the first purchase happens whenever a player opens the store on their own"
+      },
+      {
+        score: 0,
+        label: "We haven't designed a first-purchase moment",
+        echo: "there is no designed first-purchase moment in the game"
+      }
+    ]
   },
   {
-    id: 6,
-    category: "activation",
-    text: "Have you tested onboarding, tutorial, spawn flow, or first-session clarity in the last 30-60 days?",
-    helpText:
-      "Live-service games need repeated activation pressure tests as content and audiences change."
-  },
-  {
-    id: 7,
-    category: "monetisation",
-    text: "Is your first-purchase path obvious, well-timed, and connected to player motivation?",
-    helpText:
-      "The first-purchase path should meet a real player desire without damaging retention."
-  },
-  {
-    id: 8,
-    category: "monetisation",
-    text: "Do your gamepasses, developer products, bundles, or event offers form a clear offer ladder?",
-    helpText:
-      "A strong offer ladder gives different player segments sensible reasons to spend and spend again."
-  },
-  {
-    id: 9,
-    category: "monetisation",
-    text: "Have you reviewed pricing, packaging, or store flow based on payer conversion and ARPPU/ARPDAU data?",
-    helpText:
-      "Retention-safe monetisation needs pricing and packaging decisions grounded in player value data."
-  },
-  {
-    id: 10,
+    kind: "scored",
+    id: "measurement",
     category: "measurement",
-    text: "Do you have a KPI tree connecting acquisition, retention, monetisation, and revenue outcomes?",
-    helpText:
-      "Decision-ready analytics connect the lifecycle instead of leaving each team with disconnected dashboards."
+    text: "Revenue drops 20% next week. How long until you know why?",
+    helpText: "Not until you notice — until you know the cause well enough to act.",
+    options: [
+      {
+        score: 3,
+        label: "Same day — we'd see which stage moved: source, retention, or spend",
+        echo: "you'd know the same day which stage moved — source, retention, or spend"
+      },
+      {
+        score: 2,
+        label: "Within a week, after some digging",
+        echo: "you'd get to the cause within a week, after some digging"
+      },
+      {
+        score: 1,
+        label: "We'd notice the drop, but the 'why' would be a debate",
+        echo: "you'd notice the drop, but the 'why' would be a debate"
+      },
+      {
+        score: 0,
+        label: "Honestly, we might not notice for a while",
+        echo: "a 20% drop might run for a while before anyone noticed"
+      }
+    ]
   },
   {
-    id: 11,
-    category: "measurement",
-    text: "Can your team quickly identify whether a revenue issue comes from traffic quality, onboarding, conversion, pricing, or retention?",
-    helpText:
-      "A useful measurement layer tells the team what to fix first when revenue moves."
-  },
-  {
-    id: 12,
-    category: "measurement",
-    text: "Do you run experiments with clear hypotheses, success thresholds, and post-test readouts?",
-    helpText:
-      "Experiments compound when the hypothesis, metric, threshold, and next action are defined before launch."
-  },
-  {
-    id: 13,
+    kind: "scored",
+    id: "compounding",
     category: "compounding",
-    text: "Do updates and events have clear monetisation, retention, and reactivation goals before launch?",
-    helpText:
-      "Live ops should be tied to player value, not just update volume or calendar pressure."
-  },
-  {
-    id: 14,
-    category: "compounding",
-    text: "Do acquisition, live ops, monetisation, and analytics decisions happen from one shared roadmap?",
-    helpText:
-      "Lifecycle leaks compound when separate teams optimize in separate lanes."
-  },
-  {
-    id: 15,
-    category: "compounding",
-    text: "After each campaign, event, or update, do you document what improved, what failed, and what should be tested next?",
-    helpText:
-      "The studio gets stronger when each campaign leaves behind learning, not just a result."
+    text: "Your last three updates — what were they supposed to move?",
+    helpText: "Revenue, retention, reactivation — or just the content calendar.",
+    options: [
+      {
+        score: 3,
+        label: "Each shipped against a specific revenue or retention target — and we checked after",
+        echo: "your last three updates shipped against specific targets, and you checked the results"
+      },
+      {
+        score: 2,
+        label: "We had goals going in, but never went back to see what happened",
+        echo: "updates ship with goals, but nobody goes back to see what happened"
+      },
+      {
+        score: 1,
+        label: "Content calendar — keep the game fresh, keep players happy",
+        echo: "updates ship to keep the game fresh, not against a revenue target"
+      },
+      {
+        score: 0,
+        label: "We ship what feels right and watch CCU",
+        echo: "updates ship on feel, and CCU is the scoreboard"
+      }
+    ]
   }
 ];
 
-export const resultBands: ResultBand[] = [
-  {
-    min: 0,
-    max: 39,
-    title: "Critical Revenue Leakage",
-    message:
-      "Your game may be getting attention, but the player-value system is underbuilt. Scaling traffic harder right now would likely expose the same leaks faster. The priority is diagnosis: identify the biggest constraint before putting more weight on acquisition.",
-    cta: "Book a Revenue Leak Audit"
-  },
-  {
-    min: 40,
-    max: 59,
-    title: "Growth Is Leaking in Multiple Places",
-    message:
-      "You likely have a working game, but growth is still fragmented. Some parts of the lifecycle may be performing, while others are suppressing retention, payer conversion, or payback. The next move is to rank the leaks by commercial impact and fix the highest-leverage constraint first.",
-    cta: "Book a Revenue Leak Audit"
-  },
-  {
-    min: 60,
-    max: 74,
-    title: "Promising but Not Yet Scale-Ready",
-    message:
-      "Your studio has several of the right pieces in place, but the system may not be tight enough to scale confidently. Before increasing paid acquisition, creator campaigns, or update cadence, you should pressure-test source quality, first-purchase flow, and experiment discipline.",
-    cta: "Book a Revenue Leak Audit"
-  },
-  {
-    min: 75,
-    max: 89,
-    title: "Strong Foundation, Optimisation Opportunity",
-    message:
-      "Your game likely has a solid operating base. The next upside is sharper prioritisation, better segmentation, stronger monetisation tests, and cleaner payback visibility. You may not need more tactics; you need a tighter growth operating system.",
-    cta: "Book a Revenue Leak Audit"
-  },
-  {
-    min: 90,
-    max: 100,
-    title: "Revenue System Is Mature",
-    message:
-      "Your studio appears to have strong revenue operations already. The opportunity is likely advanced optimisation: payer segmentation, cohort-level acquisition strategy, event monetisation, and experiment velocity.",
-    cta: "Book a Revenue Leak Audit"
-  }
-];
+export const questions: Question[] = [contextQuestion, ...scoredQuestions];

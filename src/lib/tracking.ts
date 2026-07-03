@@ -1,4 +1,4 @@
-import type { AnswerMap, ScoreSummary } from "@/types/scorecard";
+import type { LeakResult } from "@/types/scorecard";
 
 const TRACKING_STORAGE_KEY = "ascend-revenue-leak-scorecard-attribution";
 
@@ -36,7 +36,7 @@ function getUtmParams(search: string) {
   const utm: Record<string, string> = {};
 
   params.forEach((value, key) => {
-    if (key.startsWith("utm_") || key === "gclid" || key === "fbclid") {
+    if (key.startsWith("utm_") || key === "gclid" || key === "fbclid" || key === "ref") {
       utm[key] = value;
     }
   });
@@ -81,15 +81,17 @@ export function getTrackingContext(): TrackingContext | null {
   return context;
 }
 
-export function getScoreEventPayload(summary: ScoreSummary): EventPayload {
+export function getResultEventPayload(result: LeakResult): EventPayload {
+  const scores = Object.fromEntries(
+    result.scores.map((entry) => [`score_${entry.category.id}`, entry.score])
+  );
+
   return {
-    rawScore: summary.rawScore,
-    percentage: summary.percentage,
-    resultBand: summary.band.title,
-    weakestCategoryOne: summary.weakestCategories[0]?.shortName,
-    weakestCategoryOneScore: summary.weakestCategories[0]?.percentage,
-    weakestCategoryTwo: summary.weakestCategories[1]?.shortName,
-    weakestCategoryTwoScore: summary.weakestCategories[1]?.percentage
+    leakCategory: result.leak.category.id,
+    leakStatus: result.leak.status,
+    totalScore: result.totalScore,
+    revenueBand: result.revenueBandValue,
+    ...scores
   };
 }
 
@@ -128,20 +130,61 @@ export function trackScorecardEvent(eventName: string, payload: EventPayload = {
   }).catch(() => undefined);
 }
 
-export async function submitScorecardSubmission(input: {
+/**
+ * Logs a completed scorecard session (scores + surfaced leak + attribution)
+ * to the funnel store. Fire-and-forget; never blocks the UI.
+ */
+export function logScorecardSession(input: {
+  completionId: string;
+  result: LeakResult;
+  answers: Record<string, number>;
+}) {
+  if (typeof window === "undefined") return;
+
+  void fetch("/api/scorecard-sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      completionId: input.completionId,
+      result: {
+        leakCategory: input.result.leak.category.id,
+        totalScore: input.result.totalScore,
+        revenueBand: input.result.revenueBandValue,
+        scores: Object.fromEntries(
+          input.result.scores.map((entry) => [entry.category.id, entry.score])
+        )
+      },
+      answers: input.answers,
+      trackingContext: getTrackingContext()
+    }),
+    keepalive: true
+  }).catch(() => undefined);
+}
+
+export async function submitScorecardLead(input: {
+  completionId: string;
   email: string;
   discordUsername: string;
-  answers: AnswerMap;
-  summary: ScoreSummary;
+  answers: Record<string, number>;
+  result: LeakResult;
 }) {
   const response = await fetch("/api/scorecard-submissions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      completionId: input.completionId,
       email: input.email,
       discordUsername: input.discordUsername,
       answers: input.answers,
-      summary: input.summary,
+      result: {
+        leakCategory: input.result.leak.category.id,
+        leakHeadline: input.result.leak.category.leak.headline,
+        totalScore: input.result.totalScore,
+        revenueBand: input.result.revenueBandValue,
+        scores: Object.fromEntries(
+          input.result.scores.map((entry) => [entry.category.id, entry.score])
+        )
+      },
       trackingContext: getTrackingContext()
     })
   });
@@ -150,5 +193,5 @@ export async function submitScorecardSubmission(input: {
     throw new Error("Scorecard submission failed.");
   }
 
-  return response.json() as Promise<{ ok: boolean; delivered: boolean; configured: boolean }>;
+  return response.json() as Promise<{ ok: boolean }>;
 }

@@ -1,117 +1,94 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { AtSign, LockKeyhole, Mail } from "lucide-react";
 
 type EmailCaptureProps = {
   onSubmit: (input: { email: string; discordUsername: string }) => Promise<void>;
 };
 
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function EmailCapture({ onSubmit }: EmailCaptureProps) {
   const [email, setEmail] = useState("");
   const [discordUsername, setDiscordUsername] = useState("");
   const [error, setError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const trimmedEmail = email.trim();
-    const trimmedDiscordUsername = discordUsername.trim();
-    const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
 
-    if (!isValid) {
-      setError("Enter a valid work email to unlock the full breakdown.");
+    if (!emailPattern.test(email)) {
+      setError("Enter a valid email.");
       return;
     }
 
-    if (!trimmedDiscordUsername) {
-      setError("Enter your Discord username so ASCEND can match the audit request.");
+    if (!discordUsername.trim()) {
+      setError("Enter your Discord username.");
       return;
     }
 
     setError("");
-    setIsSubmitting(true);
+    setSubmitting(true);
 
     try {
-      await onSubmit({
-        email: trimmedEmail,
-        discordUsername: trimmedDiscordUsername
-      });
-    } catch {
-      setError("Something blocked the submission. Try again in a moment.");
-      setIsSubmitting(false);
+      await onSubmit({ email: email.trim(), discordUsername: discordUsername.trim() });
+    } finally {
+      setSubmitting(false);
     }
   }
 
   return (
-    <section className="mx-auto grid min-h-[calc(100vh-96px)] max-w-2xl place-items-center py-10">
-      <div className="print-panel w-full rounded-lg border border-white/10 bg-ink-850 p-6 shadow-blue-glow sm:p-8">
-        <div className="mb-6 inline-flex h-12 w-12 items-center justify-center rounded-md border border-electric-400/30 bg-electric-500/10 text-electric-400">
-          <LockKeyhole className="h-5 w-5" aria-hidden="true" />
+    <main className="fade-in mx-auto max-w-xl pb-16 pt-12 sm:pt-20">
+      <p className="label-mono text-electric-400">Diagnosis Ready</p>
+      <h2 className="display mt-4 text-3xl text-white sm:text-4xl">
+        Your Leak Is Identified.
+      </h2>
+      <p className="mt-4 text-sm leading-7 text-slate-300 sm:text-base">
+        Enter your email and Discord username to open the diagnosis. We&apos;ll use them
+        to follow up on your result — nothing else.
+      </p>
+
+      <form onSubmit={handleSubmit} className="mt-8 space-y-4" noValidate>
+        <div>
+          <label htmlFor="email" className="label-mono block text-slate-400">
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="you@studio.gg"
+            className="mt-2 block w-full rounded-md border border-line bg-ink-900 px-4 py-3 text-white placeholder:text-slate-600 focus:border-electric-500"
+          />
         </div>
-        <p className="text-xs uppercase tracking-[0.22em] text-electric-400">
-          Score ready
-        </p>
-        <h1 className="mt-3 text-3xl font-semibold leading-tight text-white sm:text-4xl">
-          Enter your email to unlock the full breakdown.
-        </h1>
-        <p className="mt-4 leading-7 text-slate-300">
-          The full result includes your revenue leak band, category breakdown,
-          weakest lifecycle constraints, and recommended next move.
-        </p>
-
-        <form className="mt-7 space-y-4" onSubmit={handleSubmit}>
-          <label className="block" htmlFor="email">
-            <span className="mb-2 block text-sm font-medium text-slate-200">
-              Work email
-            </span>
-            <div className="relative">
-              <Mail
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
-                aria-hidden="true"
-              />
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="operator@studio.com"
-                className="min-h-12 w-full rounded-md border border-white/10 bg-ink-950 py-3 pl-10 pr-3 text-white placeholder:text-slate-600"
-              />
-            </div>
+        <div>
+          <label htmlFor="discord" className="label-mono block text-slate-400">
+            Discord Username
           </label>
+          <input
+            id="discord"
+            type="text"
+            autoComplete="off"
+            value={discordUsername}
+            onChange={(event) => setDiscordUsername(event.target.value)}
+            placeholder="yourhandle"
+            className="mt-2 block w-full rounded-md border border-line bg-ink-900 px-4 py-3 text-white placeholder:text-slate-600 focus:border-electric-500"
+          />
+        </div>
 
-          <label className="block" htmlFor="discord-username">
-            <span className="mb-2 block text-sm font-medium text-slate-200">
-              Discord username
-            </span>
-            <div className="relative">
-              <AtSign
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
-                aria-hidden="true"
-              />
-              <input
-                id="discord-username"
-                type="text"
-                value={discordUsername}
-                onChange={(event) => setDiscordUsername(event.target.value)}
-                placeholder="studiolead or studiolead#1234"
-                className="min-h-12 w-full rounded-md border border-white/10 bg-ink-950 py-3 pl-10 pr-3 text-white placeholder:text-slate-600"
-              />
-            </div>
-          </label>
+        {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
-          {error ? <p className="text-sm text-rose-300">{error}</p> : null}
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="inline-flex min-h-12 w-full items-center justify-center rounded-md bg-electric-500 px-5 py-3 text-sm font-semibold text-ink-950 transition hover:bg-electric-400"
-          >
-            {isSubmitting ? "Preparing results..." : "Show full results"}
-          </button>
-        </form>
-      </div>
-    </section>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="inline-flex min-h-12 w-full items-center justify-center rounded-md bg-electric-500 px-8 text-base font-semibold text-white transition hover:bg-electric-400 disabled:opacity-60"
+        >
+          {submitting ? "Opening…" : "Show My Diagnosis"}
+        </button>
+        <p className="label-mono text-slate-500">No List-Blasting · Follow-Up Only</p>
+      </form>
+    </main>
   );
 }
