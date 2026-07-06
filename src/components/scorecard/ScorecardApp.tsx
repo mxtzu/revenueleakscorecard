@@ -1,57 +1,57 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ScorecardLanding } from "@/components/scorecard/ScorecardLanding";
-import { ScorecardProgress } from "@/components/scorecard/ScorecardProgress";
-import { ScorecardQuestion } from "@/components/scorecard/ScorecardQuestion";
 import { EmailCapture } from "@/components/scorecard/EmailCapture";
+import { ScorecardLanding } from "@/components/scorecard/ScorecardLanding";
+import { ScorecardQuestion } from "@/components/scorecard/ScorecardQuestion";
 import { ScorecardResults } from "@/components/scorecard/ScorecardResults";
-import { getScoreSummary, isComplete } from "@/lib/scorecard";
+import { BRAND_NAME } from "@/lib/brand";
+import { getLeakResult, isComplete } from "@/lib/scorecard";
 import { questions } from "@/lib/scorecard-data";
 import {
-  getScoreEventPayload,
-  submitScorecardSubmission,
+  getResultEventPayload,
+  logScorecardSession,
+  submitScorecardLead,
   trackScorecardEvent
 } from "@/lib/tracking";
-import type { AnswerMap, AnswerValue } from "@/types/scorecard";
+import type { AnswerMap } from "@/types/scorecard";
 
 const STORAGE_KEYS = {
-  answers: "ascend-revenue-leak-scorecard-answers",
-  email: "ascend-revenue-leak-scorecard-email",
-  discordUsername: "ascend-revenue-leak-scorecard-discord-username",
-  unlocked: "ascend-revenue-leak-scorecard-unlocked"
+  answers: "ascend-rld-answers-v2",
+  unlocked: "ascend-rld-unlocked-v2",
+  completionId: "ascend-rld-completion-v2"
 };
 
-type View = "landing" | "questions" | "email" | "results";
+const ADVANCE_DELAY_MS = 220;
+
+type View = "landing" | "questions" | "capture" | "results";
+
+function createCompletionId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return "";
+}
 
 export function ScorecardApp() {
   const [view, setView] = useState<View>("landing");
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<AnswerMap>({});
-  const [email, setEmail] = useState("");
-  const [discordUsername, setDiscordUsername] = useState("");
   const [isUnlocked, setIsUnlocked] = useState(false);
+  const [completionId, setCompletionId] = useState("");
   const hasTrackedResultsView = useRef(false);
+  const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const storedAnswers = window.localStorage.getItem(STORAGE_KEYS.answers);
-    const storedEmail = window.localStorage.getItem(STORAGE_KEYS.email);
-    const storedDiscordUsername = window.localStorage.getItem(
-      STORAGE_KEYS.discordUsername
-    );
-    const storedUnlocked = window.localStorage.getItem(STORAGE_KEYS.unlocked);
-
-    if (storedAnswers) {
-      try {
-        setAnswers(JSON.parse(storedAnswers) as AnswerMap);
-      } catch {
-        window.localStorage.removeItem(STORAGE_KEYS.answers);
-      }
+    try {
+      const storedAnswers = window.localStorage.getItem(STORAGE_KEYS.answers);
+      if (storedAnswers) setAnswers(JSON.parse(storedAnswers) as AnswerMap);
+    } catch {
+      window.localStorage.removeItem(STORAGE_KEYS.answers);
     }
 
-    if (storedEmail) setEmail(storedEmail);
-    if (storedDiscordUsername) setDiscordUsername(storedDiscordUsername);
-    if (storedUnlocked === "true") setIsUnlocked(true);
+    setIsUnlocked(window.localStorage.getItem(STORAGE_KEYS.unlocked) === "true");
+    setCompletionId(window.localStorage.getItem(STORAGE_KEYS.completionId) ?? "");
   }, []);
 
   useEffect(() => {
@@ -59,154 +59,139 @@ export function ScorecardApp() {
   }, [answers]);
 
   useEffect(() => {
-    if (email) window.localStorage.setItem(STORAGE_KEYS.email, email);
-  }, [email]);
-
-  useEffect(() => {
-    if (discordUsername) {
-      window.localStorage.setItem(STORAGE_KEYS.discordUsername, discordUsername);
-    }
-  }, [discordUsername]);
-
-  useEffect(() => {
     window.localStorage.setItem(STORAGE_KEYS.unlocked, String(isUnlocked));
   }, [isUnlocked]);
 
-  const summary = useMemo(() => getScoreSummary(answers), [answers]);
-  const currentQuestion = questions[currentStep];
+  useEffect(() => {
+    if (completionId) {
+      window.localStorage.setItem(STORAGE_KEYS.completionId, completionId);
+    }
+  }, [completionId]);
+
+  useEffect(() => () => {
+    if (advanceTimer.current) clearTimeout(advanceTimer.current);
+  }, []);
+
+  const result = useMemo(() => getLeakResult(answers), [answers]);
   const complete = isComplete(answers);
 
   useEffect(() => {
     if (view !== "results" || hasTrackedResultsView.current) return;
 
     hasTrackedResultsView.current = true;
-    trackScorecardEvent("results_viewed", getScoreEventPayload(summary));
-  }, [summary, view]);
+    trackScorecardEvent("results_viewed", getResultEventPayload(result));
+  }, [result, view]);
 
   function handleStart() {
-    trackScorecardEvent("scorecard_started", {
-      resumed: complete,
-      unlocked: isUnlocked
-    });
-    setView(complete ? (isUnlocked ? "results" : "email") : "questions");
+    trackScorecardEvent("scorecard_started", { resumed: complete, unlocked: isUnlocked });
+    setView(complete ? (isUnlocked ? "results" : "capture") : "questions");
   }
 
-  function handleAnswer(value: AnswerValue) {
-    setAnswers((currentAnswers) => ({
-      ...currentAnswers,
-      [currentQuestion.id]: value
-    }));
+  function finishScorecard(finalAnswers: AnswerMap) {
+    const finalResult = getLeakResult(finalAnswers);
+    const newCompletionId = createCompletionId();
+    setCompletionId(newCompletionId);
+
+    trackScorecardEvent("scorecard_completed", getResultEventPayload(finalResult));
+    logScorecardSession({
+      completionId: newCompletionId,
+      result: finalResult,
+      answers: finalAnswers
+    });
+
+    setView(isUnlocked ? "results" : "capture");
+  }
+
+  function handleSelect(optionIndex: number) {
+    const question = questions[currentStep];
+    const nextAnswers = { ...answers, [question.id]: optionIndex };
+    setAnswers(nextAnswers);
+
     trackScorecardEvent("question_answered", {
-      questionId: currentQuestion.id,
-      category: currentQuestion.category,
+      questionId: question.id,
       step: currentStep + 1,
-      value
+      optionIndex
     });
+
+    if (advanceTimer.current) clearTimeout(advanceTimer.current);
+    advanceTimer.current = setTimeout(() => {
+      if (currentStep < questions.length - 1) {
+        setCurrentStep((step) => step + 1);
+      } else if (isComplete(nextAnswers)) {
+        finishScorecard(nextAnswers);
+      }
+    }, ADVANCE_DELAY_MS);
   }
 
-  function handleNext() {
-    if (typeof answers[currentQuestion.id] !== "number") return;
-
-    if (currentStep < questions.length - 1) {
-      setCurrentStep((step) => step + 1);
-      return;
-    }
-
-    if (isComplete(answers)) {
-      trackScorecardEvent("scorecard_completed", getScoreEventPayload(summary));
-      setView(isUnlocked ? "results" : "email");
-    }
-  }
-
-  async function handleEmailSubmit(input: {
-    email: string;
-    discordUsername: string;
-  }) {
-    let deliveredToCaptureEndpoint = false;
-
+  async function handleCaptureSubmit(input: { email: string; discordUsername: string }) {
     try {
-      const result = await submitScorecardSubmission({
+      await submitScorecardLead({
+        completionId,
         email: input.email,
         discordUsername: input.discordUsername,
         answers,
-        summary
+        result
       });
-      deliveredToCaptureEndpoint = result.delivered;
     } catch {
-      deliveredToCaptureEndpoint = false;
+      // Capture failures never block the diagnosis.
     }
 
     trackScorecardEvent("email_submitted", {
-      ...getScoreEventPayload(summary),
+      ...getResultEventPayload(result),
       email: input.email,
-      discordUsername: input.discordUsername,
-      deliveredToCaptureEndpoint
+      discordUsername: input.discordUsername
     });
-    setEmail(input.email);
-    setDiscordUsername(input.discordUsername);
     setIsUnlocked(true);
     setView("results");
   }
 
   function handleRestart() {
-    trackScorecardEvent("scorecard_restarted", getScoreEventPayload(summary));
+    trackScorecardEvent("scorecard_restarted", getResultEventPayload(result));
     hasTrackedResultsView.current = false;
     setAnswers({});
     setCurrentStep(0);
-    setEmail("");
-    setDiscordUsername("");
-    setIsUnlocked(false);
+    setCompletionId("");
     window.localStorage.removeItem(STORAGE_KEYS.answers);
-    window.localStorage.removeItem(STORAGE_KEYS.email);
-    window.localStorage.removeItem(STORAGE_KEYS.discordUsername);
-    window.localStorage.removeItem(STORAGE_KEYS.unlocked);
-    setView("landing");
+    window.localStorage.removeItem(STORAGE_KEYS.completionId);
+    setView("questions");
   }
 
   return (
-    <div className="audit-shell min-h-screen">
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-        <header className="no-print flex min-h-16 items-center justify-between gap-4 border-b border-white/10">
+    <div className="min-h-screen">
+      <div className="mx-auto w-full max-w-4xl px-5 sm:px-8">
+        <header className="flex min-h-14 items-center justify-between gap-4">
           <button
             type="button"
             onClick={() => setView("landing")}
-            className="text-left text-sm font-semibold uppercase tracking-[0.24em] text-white"
-            aria-label="ASCEND home"
+            className="label-mono text-white"
+            aria-label={`${BRAND_NAME} home`}
           >
-            ASCEND
+            {BRAND_NAME}
           </button>
-          <div className="hidden text-sm text-slate-400 sm:block">
-            Increase the value of every player before you spend more to acquire the next one.
-          </div>
+          <span className="label-mono hidden text-slate-600 sm:block">
+            Revenue Growth for Roblox Studios
+          </span>
         </header>
+        <div className="hairline" />
 
         {view === "landing" ? <ScorecardLanding onStart={handleStart} /> : null}
 
         {view === "questions" ? (
-          <main className="mx-auto max-w-5xl space-y-6 py-8 sm:py-10">
-            <ScorecardProgress currentStep={currentStep} answers={answers} />
-            <ScorecardQuestion
-              question={currentQuestion}
-              selectedAnswer={answers[currentQuestion.id]}
-              onAnswer={handleAnswer}
-              onBack={() => setCurrentStep((step) => Math.max(0, step - 1))}
-              onNext={handleNext}
-              isFirst={currentStep === 0}
-              isLast={currentStep === questions.length - 1}
-            />
-          </main>
+          <ScorecardQuestion
+            question={questions[currentStep]}
+            step={currentStep}
+            totalSteps={questions.length}
+            selectedIndex={answers[questions[currentStep].id]}
+            onSelect={handleSelect}
+            onBack={() => setCurrentStep((step) => Math.max(0, step - 1))}
+            isFirst={currentStep === 0}
+          />
         ) : null}
 
-        {view === "email" ? (
-          <EmailCapture onSubmit={handleEmailSubmit} />
-        ) : null}
+        {view === "capture" ? <EmailCapture onSubmit={handleCaptureSubmit} /> : null}
 
         {view === "results" ? (
-          <ScorecardResults
-            summary={summary}
-            email={email}
-            onRestart={handleRestart}
-          />
+          <ScorecardResults result={result} onRestart={handleRestart} />
         ) : null}
       </div>
     </div>

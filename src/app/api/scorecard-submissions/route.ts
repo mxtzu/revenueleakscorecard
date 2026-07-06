@@ -1,49 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  attachContactToSession,
+  logScorecardSession,
+  upsertScorecardLead
+} from "@/lib/server/funnel";
+import type { ScorecardResultInput, TrackingContextInput } from "@/lib/server/funnel";
 import { forwardToWebhook, getRequestContext } from "@/lib/server/webhook";
-import type { AnswerMap, ScoreSummary } from "@/types/scorecard";
 
 export const runtime = "nodejs";
 
-type ScorecardSubmissionRequest = {
+type SubmissionRequest = {
+  completionId?: string;
   email?: string;
   discordUsername?: string;
-  answers?: AnswerMap;
-  summary?: ScoreSummary;
-  trackingContext?: Record<string, unknown> | null;
+  answers?: Record<string, number>;
+  result?: ScorecardResultInput & { leakHeadline?: string };
+  trackingContext?: TrackingContextInput;
 };
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function getString(value: unknown) {
-  return typeof value === "string" ? value : "";
-}
-
-function getTrackingFields(trackingContext: Record<string, unknown> | null) {
-  const utm =
-    trackingContext &&
-    typeof trackingContext.utm === "object" &&
-    trackingContext.utm !== null
-      ? (trackingContext.utm as Record<string, unknown>)
-      : {};
-
+function getUtmFields(trackingContext: TrackingContextInput) {
+  const utm = trackingContext?.utm ?? {};
   return {
-    utmSource: getString(utm.utm_source),
-    utmMedium: getString(utm.utm_medium),
-    utmCampaign: getString(utm.utm_campaign),
-    utmContent: getString(utm.utm_content),
-    utmTerm: getString(utm.utm_term),
-    referrer: getString(trackingContext?.referrer),
-    landingPage: getString(trackingContext?.landingPage),
-    currentPage: getString(trackingContext?.currentPage),
-    sessionId: getString(trackingContext?.sessionId)
+    utmSource: utm.utm_source ?? "",
+    utmMedium: utm.utm_medium ?? "",
+    utmCampaign: utm.utm_campaign ?? "",
+    utmContent: utm.utm_content ?? "",
+    utmTerm: utm.utm_term ?? "",
+    referrer: trackingContext?.referrer ?? "",
+    landingPage: trackingContext?.landingPage ?? "",
+    sessionId: trackingContext?.sessionId ?? ""
   };
 }
 
 export async function POST(request: NextRequest) {
-  let body: ScorecardSubmissionRequest;
+  let body: SubmissionRequest;
 
   try {
-    body = (await request.json()) as ScorecardSubmissionRequest;
+    body = (await request.json()) as SubmissionRequest;
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid JSON." }, { status: 400 });
   }
@@ -61,77 +56,80 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!body.summary || typeof body.summary.percentage !== "number") {
-    return NextResponse.json({ ok: false, error: "Score summary is required." }, { status: 400 });
+  if (!body.result || typeof body.result.leakCategory !== "string") {
+    return NextResponse.json({ ok: false, error: "Result is required." }, { status: 400 });
   }
 
-  const webhookUrl =
-    process.env.SCORECARD_RESULTS_WEBHOOK_URL ?? process.env.SCORECARD_WEBHOOK_URL;
   const submittedAt = new Date().toISOString();
   const trackingContext = body.trackingContext ?? null;
-  const trackingFields = getTrackingFields(trackingContext);
-  const weakestCategoryOne = body.summary.weakestCategories[0];
-  const weakestCategoryTwo = body.summary.weakestCategories[1];
+  const scores = body.result.scores ?? {};
 
-  const submissionPayload = {
-    type: "scorecard_submission",
+  // Funnel store: attach contact to the session row logged at completion
+  // (or log a fresh row if the completion beacon never landed), plus a
+  // content_leads stage update.
+  const [sessionOutcome, leadOutcome] = await Promise.all([
+    body.completionId
+      ? attachContactToSession({
+          completionId: body.completionId,
+          email: body.email,
+          discordUsername
+        })
+      : logScorecardSession({
+          result: body.result,
+          answers: body.answers ?? {},
+          trackingContext,
+          email: body.email,
+          discordUsername
+        }),
+    upsertScorecardLead({
+      email: body.email,
+      discordUsername,
+      leakCategory: body.result.leakCategory,
+      trackingContext
+    })
+  ]);
+
+  for (const outcome of [sessionOutcome, leadOutcome]) {
+    if (outcome.error) console.error(outcome.error);
+  }
+
+  // Zapier-compatible flat payload, preserved from the previous build.
+  const webhookUrl =
+    process.env.SCORECARD_RESULTS_WEBHOOK_URL ?? process.env.SCORECARD_WEBHOOK_URL;
+  const flatFields = {
     email: body.email,
     discordUsername,
     submittedAt,
-    rawScore: body.summary.rawScore,
-    scorePercentage: body.summary.percentage,
-    resultBand: body.summary.band.title,
-    weakestCategoryOne: weakestCategoryOne?.shortName ?? "",
-    weakestCategoryOneScore: weakestCategoryOne?.percentage ?? "",
-    weakestCategoryTwo: weakestCategoryTwo?.shortName ?? "",
-    weakestCategoryTwoScore: weakestCategoryTwo?.percentage ?? "",
-    ...trackingFields,
-    fields: {
-      email: body.email,
-      discordUsername,
-      submittedAt,
-      rawScore: body.summary.rawScore,
-      scorePercentage: body.summary.percentage,
-      resultBand: body.summary.band.title,
-      weakestCategoryOne: weakestCategoryOne?.shortName ?? "",
-      weakestCategoryOneScore: weakestCategoryOne?.percentage ?? "",
-      weakestCategoryTwo: weakestCategoryTwo?.shortName ?? "",
-      weakestCategoryTwoScore: weakestCategoryTwo?.percentage ?? "",
-      ...trackingFields
-    },
-    result: {
-      rawScore: body.summary.rawScore,
-      percentage: body.summary.percentage,
-      resultBand: body.summary.band.title,
-      weakestCategories: body.summary.weakestCategories.map((category) => ({
-        id: category.id,
-        name: category.name,
-        shortName: category.shortName,
-        percentage: category.percentage,
-        status: category.status
-      })),
-      categoryScores: body.summary.categoryScores.map((category) => ({
-        id: category.id,
-        name: category.name,
-        shortName: category.shortName,
-        rawScore: category.rawScore,
-        percentage: category.percentage,
-        status: category.status
-      }))
-    },
-    answers: body.answers ?? {},
-    trackingContext,
-    requestContext: getRequestContext(request.headers),
-    timestamp: submittedAt
+    leakCategory: body.result.leakCategory,
+    leakHeadline: body.result.leakHeadline ?? "",
+    totalScore: body.result.totalScore ?? "",
+    revenueBand: body.result.revenueBand ?? "",
+    scoreAcquisition: scores.acquisition ?? "",
+    scoreActivation: scores.activation ?? "",
+    scoreMonetization: scores.monetization ?? "",
+    scoreMeasurement: scores.measurement ?? "",
+    scoreCompounding: scores.compounding ?? "",
+    ...getUtmFields(trackingContext)
   };
 
+  let delivered = false;
   try {
-    const result = await forwardToWebhook(webhookUrl, submissionPayload);
-    return NextResponse.json({ ok: true, ...result }, { status: 202 });
+    const webhookResult = await forwardToWebhook(webhookUrl, {
+      type: "scorecard_submission",
+      ...flatFields,
+      fields: flatFields,
+      answers: body.answers ?? {},
+      trackingContext,
+      requestContext: getRequestContext(request.headers),
+      timestamp: submittedAt
+    });
+    delivered = webhookResult.delivered;
   } catch {
-    return NextResponse.json(
-      { ok: false, delivered: false, configured: true, error: "Webhook delivery failed." },
-      { status: 502 }
-    );
+    delivered = false;
   }
+
+  return NextResponse.json(
+    { ok: true, delivered, logged: sessionOutcome.inserted },
+    { status: 202 }
+  );
 }

@@ -1,78 +1,82 @@
-import { categories, questions, resultBands } from "@/lib/scorecard-data";
+import { categories, contextQuestion, questions, scoredQuestions } from "@/lib/scorecard-data";
 import type {
   AnswerMap,
-  CategoryConfig,
+  CategoryId,
   CategoryScore,
-  ResultBand,
-  ScoreSummary
+  LeakResult,
+  ScoreValue
 } from "@/types/scorecard";
 
-const MAX_QUESTION_SCORE = 4;
-const QUESTIONS_PER_CATEGORY = 3;
-export const MAX_RAW_SCORE = questions.length * MAX_QUESTION_SCORE;
-export const MAX_CATEGORY_SCORE = QUESTIONS_PER_CATEGORY * MAX_QUESTION_SCORE;
+/**
+ * Tie-break order when two categories score equally low: surface the one
+ * closest to the money. Monetization and activation losses are the most
+ * concrete for an operator; compounding is the most abstract.
+ */
+const LEAK_PRIORITY: CategoryId[] = [
+  "monetization",
+  "activation",
+  "measurement",
+  "acquisition",
+  "compounding"
+];
 
-export function getLeakStatus(percentage: number) {
-  if (percentage <= 39) return "Severe leak";
-  if (percentage <= 59) return "Active leak";
-  if (percentage <= 74) return "Moderate leak";
-  if (percentage <= 89) return "Minor leak";
-  return "Strong";
-}
+export const MAX_TOTAL_SCORE = scoredQuestions.length * 3;
 
-export function getResultBand(percentage: number): ResultBand {
-  return (
-    resultBands.find(
-      (band) => percentage >= band.min && percentage <= band.max
-    ) ?? resultBands[0]
-  );
+export function getLeakStatus(score: ScoreValue) {
+  if (score === 0) return "Severe leak";
+  if (score === 1) return "Active leak";
+  if (score === 2) return "Contained";
+  return "Holding";
 }
 
 export function isComplete(answers: AnswerMap) {
   return questions.every((question) => typeof answers[question.id] === "number");
 }
 
-export function getRawScore(answers: AnswerMap) {
-  return questions.reduce((total, question) => total + (answers[question.id] ?? 0), 0);
-}
-
-export function getScorePercentage(rawScore: number) {
-  return Math.round((rawScore / MAX_RAW_SCORE) * 100);
-}
-
 export function getCategoryScores(answers: AnswerMap): CategoryScore[] {
-  return categories.map((category: CategoryConfig) => {
-    const categoryQuestions = questions.filter(
-      (question) => question.category === category.id
-    );
-    const rawScore = categoryQuestions.reduce(
-      (total, question) => total + (answers[question.id] ?? 0),
-      0
-    );
-    const percentage = Math.round((rawScore / MAX_CATEGORY_SCORE) * 100);
+  return categories.map((category) => {
+    const question = scoredQuestions.find((q) => q.category === category.id);
+    const optionIndex = question ? answers[question.id] : undefined;
+    const option =
+      question && typeof optionIndex === "number" ? question.options[optionIndex] : undefined;
+    const score = (option?.score ?? 0) as ScoreValue;
 
-    return {
-      ...category,
-      rawScore,
-      percentage,
-      status: getLeakStatus(percentage)
-    };
+    return { category, score, status: getLeakStatus(score) };
   });
 }
 
-export function getScoreSummary(answers: AnswerMap): ScoreSummary {
-  const rawScore = getRawScore(answers);
-  const percentage = getScorePercentage(rawScore);
-  const categoryScores = getCategoryScores(answers);
-  const weakestCategories = [...categoryScores]
-    .sort((a, b) => a.percentage - b.percentage || a.rawScore - b.rawScore)
-    .slice(0, 2);
+export function getLeakResult(answers: AnswerMap): LeakResult {
+  const scores = getCategoryScores(answers);
+
+  const leak = [...scores].sort(
+    (a, b) =>
+      a.score - b.score ||
+      LEAK_PRIORITY.indexOf(a.category.id) - LEAK_PRIORITY.indexOf(b.category.id)
+  )[0];
+
+  const leakQuestion = scoredQuestions.find((q) => q.category === leak.category.id);
+  const leakOptionIndex = leakQuestion ? answers[leakQuestion.id] : undefined;
+  const echo =
+    leakQuestion && typeof leakOptionIndex === "number"
+      ? leakQuestion.options[leakOptionIndex]?.echo ?? ""
+      : "";
+
+  const revenueIndex = answers[contextQuestion.id];
+  const revenueBand =
+    typeof revenueIndex === "number"
+      ? contextQuestion.options[revenueIndex]?.label ?? null
+      : null;
+  const revenueBandValue =
+    typeof revenueIndex === "number"
+      ? contextQuestion.options[revenueIndex]?.value ?? null
+      : null;
 
   return {
-    rawScore,
-    percentage,
-    band: getResultBand(percentage),
-    categoryScores,
-    weakestCategories
+    leak,
+    scores,
+    echo,
+    revenueBand,
+    revenueBandValue,
+    totalScore: scores.reduce((total, entry) => total + entry.score, 0)
   };
 }

@@ -1,103 +1,87 @@
 "use client";
 
-import { ArrowLeft, ArrowRight } from "lucide-react";
-import { answerOptions, categories } from "@/lib/scorecard-data";
-import type { AnswerValue, ScorecardQuestion as Question } from "@/types/scorecard";
+import clsx from "clsx";
+import { categories } from "@/lib/scorecard-data";
+import type { Question } from "@/types/scorecard";
 
 type ScorecardQuestionProps = {
   question: Question;
-  selectedAnswer?: AnswerValue;
-  onAnswer: (value: AnswerValue) => void;
+  step: number;
+  totalSteps: number;
+  selectedIndex: number | undefined;
+  onSelect: (optionIndex: number) => void;
   onBack: () => void;
-  onNext: () => void;
   isFirst: boolean;
-  isLast: boolean;
 };
+
+function getEyebrow(question: Question) {
+  if (question.kind === "context") return "Baseline";
+  return categories.find((category) => category.id === question.category)?.name ?? "";
+}
 
 export function ScorecardQuestion({
   question,
-  selectedAnswer,
-  onAnswer,
+  step,
+  totalSteps,
+  selectedIndex,
+  onSelect,
   onBack,
-  onNext,
-  isFirst,
-  isLast
+  isFirst
 }: ScorecardQuestionProps) {
-  const category = categories.find((item) => item.id === question.category);
+  const progress = Math.round(((step + 1) / totalSteps) * 100);
 
   return (
-    <section className="fade-in print-panel rounded-lg border border-white/10 bg-ink-850/95 p-5 shadow-blue-glow sm:p-7">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.22em] text-electric-400">
-            {category?.name}
-          </p>
-          <h2 className="mt-3 max-w-3xl text-2xl font-semibold leading-tight text-white sm:text-3xl">
-            {question.text}
-          </h2>
-        </div>
-        <div className="rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-slate-300">
-          Score 0-4
-        </div>
+    <main className="fade-in mx-auto max-w-2xl pb-16 pt-10 sm:pt-16" key={question.id}>
+      <div className="flex items-center justify-between gap-4">
+        <p className="label-mono text-slate-500">
+          Question {String(step + 1).padStart(2, "0")} / {String(totalSteps).padStart(2, "0")}
+        </p>
+        <p className="label-mono text-electric-400">{getEyebrow(question)}</p>
+      </div>
+      <div className="mt-3 h-px w-full bg-white/10">
+        <div
+          className="h-px bg-electric-500 transition-all duration-300"
+          style={{ width: `${progress}%` }}
+        />
       </div>
 
-      <p className="mb-6 max-w-3xl text-base leading-7 text-slate-300">
-        {question.helpText}
-      </p>
+      <h2 className="mt-8 text-xl font-semibold leading-8 text-white sm:text-2xl sm:leading-9">
+        {question.text}
+      </h2>
+      <p className="mt-3 text-sm leading-6 text-slate-500">{question.helpText}</p>
 
-      <div className="grid gap-3" role="radiogroup" aria-label={question.text}>
-        {answerOptions.map((option) => {
-          const isSelected = selectedAnswer === option.value;
+      <div className="mt-7 space-y-3">
+        {question.options.map((option, index) => {
+          const selected = selectedIndex === index;
 
           return (
             <button
-              key={option.value}
+              key={option.label}
               type="button"
-              role="radio"
-              aria-checked={isSelected}
-              onClick={() => onAnswer(option.value)}
-              className={`group flex min-h-16 w-full items-center gap-4 rounded-md border px-4 py-3 text-left transition ${
-                isSelected
-                  ? "border-electric-400 bg-electric-500/12 text-white"
-                  : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/25 hover:bg-white/[0.06]"
-              }`}
+              onClick={() => onSelect(index)}
+              aria-pressed={selected}
+              className={clsx(
+                "block w-full rounded-md border px-5 py-4 text-left text-sm leading-6 transition sm:text-base",
+                selected
+                  ? "border-electric-500 bg-electric-500/10 text-white"
+                  : "border-line bg-ink-900 text-slate-300 hover:border-slate-500 hover:text-white"
+              )}
             >
-              <span
-                className={`grid h-9 w-9 shrink-0 place-items-center rounded-md border text-sm font-semibold ${
-                  isSelected
-                    ? "border-electric-400 bg-electric-500 text-white"
-                    : "border-white/15 bg-ink-900 text-slate-300"
-                }`}
-              >
-                {option.value}
-              </span>
-              <span className="text-sm font-medium sm:text-base">{option.label}</span>
+              {option.label}
             </button>
           );
         })}
       </div>
 
-      <div className="mt-7 flex items-center justify-between gap-3">
+      {!isFirst ? (
         <button
           type="button"
           onClick={onBack}
-          disabled={isFirst}
-          className="no-print inline-flex min-h-11 items-center gap-2 rounded-md border border-white/10 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-white/25 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-40"
+          className="label-mono mt-8 text-slate-500 transition hover:text-white"
         >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Back
+          ← Back
         </button>
-
-        <button
-          type="button"
-          onClick={onNext}
-          disabled={typeof selectedAnswer !== "number"}
-          className="no-print inline-flex min-h-11 items-center gap-2 rounded-md bg-electric-500 px-5 py-2 text-sm font-semibold text-ink-950 transition hover:bg-electric-400 disabled:cursor-not-allowed disabled:opacity-45"
-        >
-          {isLast ? "Unlock results" : "Next"}
-          <ArrowRight className="h-4 w-4" aria-hidden="true" />
-        </button>
-      </div>
-    </section>
+      ) : null}
+    </main>
   );
 }
