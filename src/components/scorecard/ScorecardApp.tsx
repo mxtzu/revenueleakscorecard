@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmailCapture } from "@/components/scorecard/EmailCapture";
+import { Logo } from "@/components/scorecard/Logo";
 import { ScorecardLanding } from "@/components/scorecard/ScorecardLanding";
 import { ScorecardQuestion } from "@/components/scorecard/ScorecardQuestion";
 import { ScorecardResults } from "@/components/scorecard/ScorecardResults";
@@ -163,10 +164,9 @@ export function ScorecardApp() {
           <button
             type="button"
             onClick={() => setView("landing")}
-            className="label-mono text-white"
             aria-label={`${BRAND_NAME} home`}
           >
-            {BRAND_NAME}
+            <Logo />
           </button>
           <span className="label-mono hidden text-slate-600 sm:block">
             Revenue Growth for Roblox Studios
