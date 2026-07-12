@@ -363,10 +363,51 @@ def _iter_search_universes(search_data):
                 yield int(uid)
 
 
+REQUIRED_HOSTS = [
+    "apis.roblox.com", "games.roblox.com", "groups.roblox.com",
+    "users.roblox.com", "www.roblox.com", "discord.com",
+]
+
+
+async def preflight() -> list[str]:
+    """Fail fast if the environment can't reach the data sources at all.
+    Returns the list of unreachable hosts (any HTTP status counts as
+    reachable — only transport-level failures mean the host is blocked)."""
+    import httpx
+
+    blocked = []
+    async with httpx.AsyncClient(timeout=10,
+                                 headers={"User-Agent": config.USER_AGENT}) as c:
+        for host in REQUIRED_HOSTS:
+            try:
+                await c.get(f"https://{host}/")
+            except httpx.TransportError as e:
+                blocked.append(host)
+                log.error("preflight: %s unreachable (%s)", host, e)
+    return blocked
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--target", type=int, default=config.TARGET_LEADS)
+    ap.add_argument("--skip-preflight", action="store_true",
+                    help="attempt the run even if preflight says hosts are blocked")
     args = ap.parse_args()
+
+    if not args.skip_preflight:
+        blocked = asyncio.run(preflight())
+        if blocked:
+            log.error(
+                "ABORTING: %d/%d required hosts are unreachable from this "
+                "environment: %s. This is a network/egress-policy constraint — "
+                "allow these hosts (plus discord.com) and re-run. No output "
+                "workbook is written because zero candidates could be screened; "
+                "emitting one would misrepresent a network failure as a "
+                "prospecting result.", len(blocked), len(REQUIRED_HOSTS),
+                ", ".join(blocked))
+            raise SystemExit(2)
+        log.info("preflight OK: all %d required hosts reachable", len(REQUIRED_HOSTS))
+
     asyncio.run(Pipeline(args.target).run())
 
 
