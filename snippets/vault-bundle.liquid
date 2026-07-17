@@ -1,0 +1,343 @@
+{%- comment -%}
+  ============================================================================
+  VAULT BUNDLE  —  prefix: .vb-
+  TIER 3 · "Black Diamond / Flagship"  (obsidian faceted panel, layered light
+  sweep + sparkle, gold+mint dual accent, flagship seal). The richest component.
+  ----------------------------------------------------------------------------
+  Flagship bundle of the 3 Vault modules. One button adds ALL THREE variants
+  via AJAX. Savings computed in Liquid from config — never hard-coded.
+
+  NOTE: for a true in-checkout bump you'd need Plus + Checkout UI Extensions;
+  this is the product-page AJAX version.
+
+  Self-contained: own CSS/markup/JS, all scoped under .vb-. Keyframes are
+  namespaced (vb-sweep, vb-sparkle, vb-seal) so nothing clashes.
+  ============================================================================
+{%- endcomment -%}
+
+{%- comment -%} ─────────────── CONFIG (edit these) ─────────────── {%- endcomment -%}
+{%- comment -%} Product handles (admin reference only). {%- endcomment -%}
+{%- assign vb_h1 = 'vault-psychology-discipline' -%}
+{%- assign vb_h2 = 'vault-session-prep-timing' -%}
+{%- assign vb_h3 = 'vault-tradingview-setup' -%}
+
+{%- comment -%} Variant IDs — paste the REAL numeric variant IDs from Shopify. {%- endcomment -%}
+{%- assign vb_v1 = 00000000000004 -%}
+{%- assign vb_v2 = 00000000000005 -%}
+{%- assign vb_v3 = 00000000000006 -%}
+
+{%- comment -%} Prices in pence. £29.00 = 2900. {%- endcomment -%}
+{%- assign vb_p1 = 2900 -%}   {%- comment -%} Psychology & Discipline {%- endcomment -%}
+{%- assign vb_p2 = 2900 -%}   {%- comment -%} Session Prep & Timing {%- endcomment -%}
+{%- assign vb_p3 = 2400 -%}   {%- comment -%} TradingView Setup {%- endcomment -%}
+{%- assign vb_bundle_price = 6900 -%}   {%- comment -%} what you charge for the Vault {%- endcomment -%}
+
+{%- comment -%} Copy {%- endcomment -%}
+{%- assign vb_seal      = 'Flagship' -%}
+{%- assign vb_eyebrow   = 'The Vault' -%}
+{%- assign vb_heading   = 'The complete discipline layer around the strategy.' -%}
+{%- assign vb_sub       = 'Three modules that turn a good system into a repeatable practice.' -%}
+{%- assign vb_m1_title  = 'Psychology & Discipline' -%}
+{%- assign vb_m1_benefit= 'Build the rules and routines that keep you executing the plan under pressure.' -%}
+{%- assign vb_m2_title  = 'Session Prep & Timing' -%}
+{%- assign vb_m2_benefit= 'Know exactly what to check and when to be at the screen for ES and NASDAQ.' -%}
+{%- assign vb_m3_title  = 'TradingView Setup' -%}
+{%- assign vb_m3_benefit= 'Replicate the exact chart, layout and alerts the reversal method is read on.' -%}
+{%- assign vb_cta_label = 'Get the Vault' -%}
+
+{%- comment -%} ─────────────── REAL SAVING (computed, never hard-coded) ─────────────── {%- endcomment -%}
+{%- assign vb_sum    = vb_p1 | plus: vb_p2 | plus: vb_p3 -%}
+{%- assign vb_saving = vb_sum | minus: vb_bundle_price -%}
+
+<div class="vb-wrap">
+  <style>
+    .vb-wrap{
+      --vb-body:#aeb4ba; --vb-muted:#8b939b; --vb-heading:#eef1f4;
+      --vb-green:#0f9d4f; --vb-mint:#7dffa8; --vb-gold:#e8a020; --vb-line:rgba(255,255,255,.10);
+      display:block; margin:0 auto; max-width:720px;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      color:var(--vb-body); line-height:1.55; -webkit-font-smoothing:antialiased;
+    }
+    .vb-wrap *{box-sizing:border-box}
+
+    /* ── Obsidian faceted flagship panel ──────────────────────────────
+       Deeper black than the diamond tier, stronger bevel + outer glow,
+       larger cut facets via clip-path, layered gradient "cut" on the body. */
+    .vb-panel{
+      position:relative; isolation:isolate;
+      clip-path:polygon(30px 0, 100% 0, 100% calc(100% - 30px), calc(100% - 30px) 100%, 0 100%, 0 30px);
+      padding:30px 28px 26px;
+      background:
+        radial-gradient(140% 100% at 12% -10%, rgba(125,255,168,.10), transparent 42%),
+        radial-gradient(120% 90% at 100% 110%, rgba(232,160,32,.10), transparent 50%),
+        linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,0) 38%),
+        linear-gradient(155deg,#101413,#060807 60%,#040404);
+      border:1px solid rgba(255,255,255,.14);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.16),
+        inset 0 0 60px rgba(15,157,79,.10),
+        inset 0 -30px 60px rgba(0,0,0,.6),
+        0 16px 44px rgba(0,0,0,.7),
+        0 0 40px rgba(15,157,79,.20);
+    }
+    /* Prismatic + gold/mint edge just inside the border. */
+    .vb-panel::before{
+      content:""; position:absolute; inset:0; pointer-events:none; z-index:2; clip-path:inherit; padding:1.5px;
+      background:linear-gradient(135deg, rgba(125,255,168,.6), rgba(232,160,32,.4) 25%, rgba(255,255,255,.06) 45%, rgba(160,120,255,.35) 62%, rgba(232,160,32,.4) 80%, rgba(125,255,168,.55));
+      -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite:xor; mask-composite:exclude; opacity:.7;
+    }
+    /* Richer, wider moving light sweep. */
+    .vb-panel::after{
+      content:""; position:absolute; inset:-50% -12%; pointer-events:none; z-index:1;
+      background:linear-gradient(112deg, transparent 34%, rgba(255,255,255,.10) 44%, rgba(255,255,255,.30) 50%, rgba(125,255,168,.16) 54%, transparent 66%);
+      transform:translateX(-120%) rotate(1.5deg);
+      animation:vb-sweep 7s ease-in-out infinite;
+      mix-blend-mode:screen;
+    }
+    @keyframes vb-sweep{
+      0%,100%{transform:translateX(-120%) rotate(1.5deg)}
+      50%,66%{transform:translateX(120%) rotate(1.5deg)}
+    }
+
+    /* Layered sparkle — five glints of varied size/timing. */
+    .vb-spark{position:absolute; z-index:3; pointer-events:none; opacity:0;
+      background:
+        radial-gradient(closest-side,#fff 0,rgba(255,255,255,.75) 40%,transparent 72%) center/2px 100% no-repeat,
+        radial-gradient(closest-side,#fff 0,rgba(255,255,255,.75) 40%,transparent 72%) center/100% 2px no-repeat;}
+    .vb-spark.k1{top:20px;  left:34px;  width:16px; height:16px; animation:vb-sparkle 4.4s ease-in-out .1s infinite}
+    .vb-spark.k2{top:58px;  right:40px; width:11px; height:11px; animation:vb-sparkle 5.6s ease-in-out 1.1s infinite}
+    .vb-spark.k3{bottom:70px; left:24%; width:9px;  height:9px;  animation:vb-sparkle 3.9s ease-in-out 2.0s infinite}
+    .vb-spark.k4{top:40%;  right:26%;  width:8px;  height:8px;  animation:vb-sparkle 4.9s ease-in-out 2.7s infinite}
+    .vb-spark.k5{bottom:30px; right:20%; width:13px; height:13px; animation:vb-sparkle 6.1s ease-in-out 3.4s infinite}
+    @keyframes vb-sparkle{
+      0%,100%{opacity:0; transform:scale(.35) rotate(0deg)}
+      50%{opacity:1; transform:scale(1) rotate(45deg)}
+    }
+
+    /* Flagship seal (top-right), gently shimmering. */
+    .vb-seal{
+      position:absolute; top:0; right:0; z-index:4;
+      display:inline-flex; align-items:center; gap:6px;
+      font-size:10.5px; letter-spacing:.18em; text-transform:uppercase; font-weight:800;
+      color:#0a0a0a; padding:7px 14px 7px 16px;
+      clip-path:polygon(14px 0, 100% 0, 100% 100%, 0 100%);
+      background:linear-gradient(180deg,#fff6e0,#e8a020 55%,#a86c0f);
+      box-shadow:0 3px 12px rgba(232,160,32,.4);
+    }
+    .vb-seal svg{width:12px; height:12px; display:block}
+
+    /* Gold + mint dual accent line. */
+    .vb-accent{position:relative; z-index:4; height:3px; border-radius:999px; margin:0 0 18px;
+      background:linear-gradient(90deg,var(--vb-mint),var(--vb-green) 40%,var(--vb-gold));
+      box-shadow:0 0 12px rgba(15,157,79,.4);}
+
+    .vb-eyebrow{position:relative; z-index:4; display:inline-block; font-size:11px; letter-spacing:.16em;
+      text-transform:uppercase; font-weight:800; color:#d7dde3;
+      border:1px solid rgba(255,255,255,.16); border-radius:999px; padding:5px 12px; margin:0 0 14px}
+    .vb-heading{position:relative; z-index:4; margin:0 0 6px; font-size:24px; line-height:1.2; font-weight:800;
+      background:linear-gradient(180deg,#fff,#e6e8ea 45%,#b9bdc2 60%,#fff);
+      -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:#eef1f4}
+    .vb-sub{position:relative; z-index:4; margin:0 0 22px; font-size:14px; color:var(--vb-muted)}
+
+    /* What's included grid. */
+    .vb-grid{position:relative; z-index:4; display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:0 0 22px}
+    .vb-mod{
+      padding:16px 14px; border-radius:12px;
+      background:linear-gradient(160deg,rgba(255,255,255,.045),rgba(255,255,255,0) 60%),linear-gradient(160deg,#101312,#080a09);
+      border:1px solid var(--vb-line);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    .vb-mod-ico{
+      width:42px; height:42px; display:grid; place-items:center; border-radius:11px; margin:0 0 12px;
+      background:linear-gradient(160deg,#161a19,#0b0e0d); border:1px solid rgba(125,255,168,.22);
+      color:var(--vb-mint); box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 0 14px rgba(15,157,79,.15);
+    }
+    .vb-mod-ico svg{width:22px; height:22px; display:block}
+    .vb-mod-title{margin:0 0 5px; font-size:14px; font-weight:700; color:var(--vb-heading)}
+    .vb-mod-benefit{margin:0; font-size:12.5px; color:var(--vb-muted); line-height:1.5}
+
+    /* Pricing. */
+    .vb-pricing{position:relative; z-index:4; display:flex; flex-wrap:wrap; align-items:baseline; gap:10px 14px;
+      padding:16px 0; margin:0 0 18px; border-top:1px solid var(--vb-line)}
+    .vb-was{font-size:15px; color:var(--vb-muted); text-decoration:line-through; text-decoration-color:rgba(255,255,255,.35)}
+    .vb-now{font-size:28px; font-weight:800; color:var(--vb-heading)}
+    .vb-save{font-size:12.5px; font-weight:800; letter-spacing:.02em; color:#0a0a0a;
+      border-radius:999px; padding:6px 12px;
+      background:linear-gradient(180deg,#eafff2,#7dffa8 55%,#0f9d4f);
+      box-shadow:0 2px 10px rgba(15,157,79,.35)}
+
+    /* Flagship CTA. */
+    .vb-cta{position:relative; z-index:4; appearance:none; -webkit-appearance:none; cursor:pointer;
+      width:100%; min-height:52px; padding:15px 20px; border-radius:13px; overflow:hidden;
+      font-size:16px; font-weight:800; letter-spacing:.01em; color:#04120a;
+      background:linear-gradient(180deg,#eafff2,#7dffa8 45%,#12a353);
+      border:1px solid rgba(125,255,168,.7);
+      box-shadow:0 6px 22px rgba(15,157,79,.4), inset 0 1px 0 rgba(255,255,255,.5);
+      transition:filter .15s ease, transform .05s ease}
+    .vb-cta:hover{filter:brightness(1.05)}
+    .vb-cta:active{transform:translateY(1px)}
+    .vb-cta[disabled]{opacity:.65; cursor:not-allowed}
+    .vb-cta:focus-visible{outline:2px solid var(--vb-mint); outline-offset:3px}
+    /* Subtle shine crossing the button. */
+    .vb-cta::after{content:""; position:absolute; inset:0;
+      background:linear-gradient(115deg,transparent 40%,rgba(255,255,255,.5) 50%,transparent 60%);
+      transform:translateX(-120%); animation:vb-shine 5.5s ease-in-out 1s infinite}
+    @keyframes vb-shine{0%,100%{transform:translateX(-120%)}55%,72%{transform:translateX(120%)}}
+
+    .vb-status{position:relative; z-index:4; margin:12px 0 0; min-height:18px; font-size:13px; text-align:center}
+    .vb-status.is-ok{color:var(--vb-mint)}
+    .vb-status.is-err{color:#ff9b9b}
+
+    .vb-disc{position:relative; z-index:4; margin:16px 2px 0; font-size:11.5px; line-height:1.5; color:var(--vb-muted)}
+
+    @media (max-width:560px){
+      .vb-grid{grid-template-columns:1fr}
+      .vb-panel{padding:26px 18px}
+      .vb-heading{font-size:21px}
+      .vb-seal{font-size:10px; padding:6px 12px 6px 14px}
+    }
+
+    /* Reduced motion: freeze every animation, keep the flagship look intact. */
+    @media (prefers-reduced-motion:reduce){
+      .vb-panel::after, .vb-spark, .vb-cta::after{animation:none}
+      .vb-spark{opacity:.6}
+      .vb-panel::after{transform:translateX(-30%) rotate(1.5deg); opacity:.5}
+      .vb-cta::after{display:none}
+      .vb-cta{transition:none}
+    }
+  </style>
+
+  <div class="vb-panel">
+    <span class="vb-seal" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.3 6.9.7-5.1 4.6 1.4 6.8L12 17.8 5.9 20.4 7.3 13.6 2.2 9l6.9-.7z"/></svg>
+      {{ vb_seal }}
+    </span>
+
+    <span class="vb-spark k1" aria-hidden="true"></span>
+    <span class="vb-spark k2" aria-hidden="true"></span>
+    <span class="vb-spark k3" aria-hidden="true"></span>
+    <span class="vb-spark k4" aria-hidden="true"></span>
+    <span class="vb-spark k5" aria-hidden="true"></span>
+
+    <span class="vb-eyebrow">{{ vb_eyebrow }}</span>
+    <h3 class="vb-heading">{{ vb_heading }}</h3>
+    <p class="vb-sub">{{ vb_sub }}</p>
+    <div class="vb-accent" aria-hidden="true"></div>
+
+    <div class="vb-grid">
+      <div class="vb-mod">
+        <span class="vb-mod-ico" aria-hidden="true">
+          {%- comment -%} mind / discipline {%- endcomment -%}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5 5 0 00-5 5c0 1.3.5 2.4 1.3 3.3A4 4 0 007 15a4 4 0 004 4h1V5a2 2 0 00-1-2z"/><path d="M12 3a5 5 0 015 5c0 1.3-.5 2.4-1.3 3.3A4 4 0 0117 15a4 4 0 01-4 4"/></svg>
+        </span>
+        <p class="vb-mod-title">{{ vb_m1_title }}</p>
+        <p class="vb-mod-benefit">{{ vb_m1_benefit }}</p>
+      </div>
+      <div class="vb-mod">
+        <span class="vb-mod-ico" aria-hidden="true">
+          {%- comment -%} clock / session timing {%- endcomment -%}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        </span>
+        <p class="vb-mod-title">{{ vb_m2_title }}</p>
+        <p class="vb-mod-benefit">{{ vb_m2_benefit }}</p>
+      </div>
+      <div class="vb-mod">
+        <span class="vb-mod-ico" aria-hidden="true">
+          {%- comment -%} chart / TradingView setup {%- endcomment -%}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 14l3-3 2 2 4-5"/><path d="M9 21h6"/></svg>
+        </span>
+        <p class="vb-mod-title">{{ vb_m3_title }}</p>
+        <p class="vb-mod-benefit">{{ vb_m3_benefit }}</p>
+      </div>
+    </div>
+
+    <div class="vb-pricing">
+      {%- if vb_saving > 0 -%}
+        <span class="vb-was">{{ vb_sum | money }}</span>
+      {%- endif -%}
+      <span class="vb-now">{{ vb_bundle_price | money }}</span>
+      {%- if vb_saving > 0 -%}
+        <span class="vb-save">You save {{ vb_saving | money }}</span>
+      {%- endif -%}
+    </div>
+
+    <button
+      type="button"
+      class="vb-cta"
+      data-vb-add
+      data-variant-1="{{ vb_v1 }}"
+      data-variant-2="{{ vb_v2 }}"
+      data-variant-3="{{ vb_v3 }}"
+      aria-label="{{ vb_cta_label }}">
+      {{ vb_cta_label }}
+    </button>
+
+    <p class="vb-status" data-vb-status role="status" aria-live="polite"></p>
+
+    <p class="vb-disc">
+      Educational material only — not financial advice. Trading index futures carries
+      substantial risk of loss.
+    </p>
+  </div>
+
+  <script>
+    (function(){
+      var root = (document.currentScript && document.currentScript.closest('.vb-wrap'))
+               || document.querySelector('.vb-wrap');
+      if(!root) return;
+      var btn    = root.querySelector('[data-vb-add]');
+      var status = root.querySelector('[data-vb-status]');
+      if(!btn) return;
+
+      function setStatus(msg, kind){
+        status.textContent = msg || '';
+        status.className = 'vb-status' + (kind ? ' is-' + kind : '');
+      }
+      function refreshCart(){
+        ['cart:refresh','cart:build','ajaxProduct:added'].forEach(function(name){
+          document.dispatchEvent(new CustomEvent(name, {bubbles:true}));
+        });
+        var drawer = document.querySelector('cart-drawer, #CartDrawer, .cart-drawer, [data-cart-drawer]');
+        if(drawer){
+          if(typeof drawer.open === 'function'){ try{ drawer.open(); }catch(e){} }
+          drawer.classList.add('active','is-open','open');
+        } else {
+          window.location.href = '/cart';
+        }
+      }
+
+      btn.addEventListener('click', function(){
+        var ids = [
+          btn.getAttribute('data-variant-1'),
+          btn.getAttribute('data-variant-2'),
+          btn.getAttribute('data-variant-3')
+        ].map(Number);
+        var original = btn.textContent;
+        btn.disabled = true;
+        setStatus('Adding the Vault…');
+
+        fetch('/cart/add.js', {
+          method:'POST',
+          headers:{'Content-Type':'application/json','Accept':'application/json'},
+          body: JSON.stringify({ items: ids.map(function(id){ return { id:id, quantity:1 }; }) })
+        })
+        .then(function(res){
+          if(!res.ok){ return res.json().then(function(d){ throw new Error(d.description || 'Could not add the Vault'); }); }
+          return res.json();
+        })
+        .then(function(){
+          setStatus('Vault added to cart ✓', 'ok');
+          refreshCart();
+        })
+        .catch(function(err){
+          setStatus((err && err.message) ? err.message : 'Something went wrong. Please try again.', 'err');
+        })
+        .finally(function(){
+          btn.disabled = false;
+          btn.textContent = original;
+        });
+      });
+    })();
+  </script>
+</div>

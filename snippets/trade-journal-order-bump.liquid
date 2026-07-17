@@ -1,0 +1,267 @@
+{%- comment -%}
+  ============================================================================
+  TRADE JOURNAL ORDER BUMP  —  prefix: .tjb-
+  TIER 2 · "Diamond"  (gem-cut card, glassy moving sheen, CSS-only sparkle)
+  ----------------------------------------------------------------------------
+  Sits directly under the main Add-to-Cart. Ticking the premium toggle adds the
+  Journal variant via AJAX; unticking removes it.
+
+  NOTE: a TRUE in-checkout order bump needs Shopify Plus + Checkout UI
+  Extensions. This is the product-page AJAX version.
+
+  Self-contained: own CSS/markup/JS, all scoped under .tjb-. Keyframes are
+  namespaced (tjb-sheen, tjb-sparkle, tjb-caustic) so nothing clashes.
+  ============================================================================
+{%- endcomment -%}
+
+{%- comment -%} ─────────────── CONFIG (edit these) ─────────────── {%- endcomment -%}
+{%- comment -%} Product handle (admin reference only). {%- endcomment -%}
+{%- assign tjb_handle = 'trade-journal' -%}
+
+{%- comment -%} Variant ID — paste the REAL numeric variant ID from Shopify. {%- endcomment -%}
+{%- assign tjb_variant = 00000000000003 -%}
+
+{%- comment -%} Bump price in pence. £19.00 = 1900. {%- endcomment -%}
+{%- assign tjb_price = 1900 -%}
+
+{%- comment -%} Copy {%- endcomment -%}
+{%- assign tjb_ribbon    = 'Add-on' -%}
+{%- assign tjb_title     = 'Add the Trade Journal' -%}
+{%- assign tjb_value     = 'Log every trade — auto-calculates your real win rate and R:R.' -%}
+{%- assign tjb_toggle    = 'Add to my order' -%}
+
+<div class="tjb-wrap">
+  <style>
+    .tjb-wrap{
+      --tjb-body:#aeb4ba; --tjb-muted:#8b939b; --tjb-heading:#eef1f4;
+      --tjb-green:#0f9d4f; --tjb-mint:#7dffa8; --tjb-line:rgba(255,255,255,.10);
+      display:block; margin:0 auto; max-width:640px;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      color:var(--tjb-body); line-height:1.55; -webkit-font-smoothing:antialiased;
+    }
+    .tjb-wrap *{box-sizing:border-box}
+
+    /* ── Gem-cut card ──────────────────────────────────────────────
+       clip-path bevels the top-left & bottom-right corners to suggest
+       a cut facet; layered gradients add the glassy body + prismatic edge. */
+    .tjb-gem{
+      position:relative; isolation:isolate;
+      clip-path:polygon(22px 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%, 0 22px);
+      padding:24px 24px 22px;
+      background:
+        radial-gradient(120% 90% at 15% 0%, rgba(125,255,168,.10), rgba(125,255,168,0) 45%),
+        linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,0) 42%),
+        linear-gradient(160deg,#16201a,#0a0f0c 55%,#0a0a0a);
+      border:1px solid rgba(125,255,168,.28);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.14),
+        inset 0 0 40px rgba(15,157,79,.10),
+        0 10px 34px rgba(0,0,0,.6),
+        0 0 26px rgba(15,157,79,.18);
+    }
+    /* Faint prismatic edge highlight sitting just inside the border. */
+    .tjb-gem::before{
+      content:""; position:absolute; inset:0; pointer-events:none; z-index:2;
+      clip-path:inherit;
+      padding:1px;
+      background:linear-gradient(135deg, rgba(125,255,168,.55), rgba(255,255,255,.05) 30%, rgba(160,120,255,.35) 55%, rgba(255,255,255,.05) 75%, rgba(125,255,168,.45));
+      -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite:xor; mask-composite:exclude;
+      opacity:.6;
+    }
+    /* Glassy moving specular sheen — sweeps slowly across the surface. */
+    .tjb-gem::after{
+      content:""; position:absolute; inset:-40% -10%; pointer-events:none; z-index:1;
+      background:linear-gradient(115deg, transparent 38%, rgba(255,255,255,.14) 48%, rgba(255,255,255,.32) 50%, rgba(255,255,255,.14) 52%, transparent 62%);
+      transform:translateX(-120%) rotate(2deg);
+      animation:tjb-sheen 6.5s ease-in-out infinite;
+      mix-blend-mode:screen;
+    }
+    @keyframes tjb-sheen{
+      0%,100%{transform:translateX(-120%) rotate(2deg)}
+      55%,70%{transform:translateX(120%) rotate(2deg)}
+    }
+
+    /* Soft green-white caustic glow that breathes underneath. */
+    .tjb-caustic{
+      position:absolute; inset:0; z-index:0; pointer-events:none; clip-path:inherit;
+      background:radial-gradient(60% 50% at 78% 88%, rgba(125,255,168,.14), transparent 70%);
+      animation:tjb-caustic 7.5s ease-in-out infinite;
+    }
+    @keyframes tjb-caustic{0%,100%{opacity:.45}50%{opacity:.9}}
+
+    /* CSS-only sparkle glints — four-point stars fading in/out. */
+    .tjb-spark{position:absolute; z-index:3; pointer-events:none; width:14px; height:14px; opacity:0}
+    .tjb-spark::before,.tjb-spark::after{
+      content:""; position:absolute; inset:0; margin:auto;
+      background:radial-gradient(closest-side, #fff, rgba(255,255,255,.7) 40%, transparent 70%);
+    }
+    .tjb-spark::before{width:100%; height:2px}
+    .tjb-spark::after{width:2px; height:100%}
+    .tjb-spark.s1{top:14px;  left:22px;  animation:tjb-sparkle 4.2s ease-in-out .2s infinite}
+    .tjb-spark.s2{top:52px;  right:30px; width:10px; height:10px; animation:tjb-sparkle 5.1s ease-in-out 1.4s infinite}
+    .tjb-spark.s3{bottom:22px; left:40%; width:8px;  height:8px; animation:tjb-sparkle 3.7s ease-in-out 2.3s infinite}
+    @keyframes tjb-sparkle{
+      0%,100%{opacity:0; transform:scale(.4) rotate(0deg)}
+      50%{opacity:.95; transform:scale(1) rotate(45deg)}
+    }
+
+    /* ── Content ── */
+    .tjb-head{position:relative; z-index:4; display:flex; align-items:center; gap:12px; margin:0 0 12px}
+    .tjb-ribbon{
+      font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; font-weight:800;
+      color:#05130b; padding:5px 10px; border-radius:999px;
+      background:linear-gradient(180deg,#eafff2,#7dffa8 55%,#0f9d4f);
+      box-shadow:0 2px 8px rgba(15,157,79,.4);
+    }
+    .tjb-price{
+      margin-left:auto; font-size:18px; font-weight:800;
+      background:linear-gradient(180deg,#fff,#e6e8ea 45%,#b9bdc2 60%,#fff);
+      -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:#eef1f4;
+    }
+    .tjb-plus{font-size:13px; font-weight:700; color:var(--tjb-mint)}
+
+    .tjb-title{position:relative; z-index:4; margin:0 0 5px; font-size:18px; font-weight:800; color:var(--tjb-heading)}
+    .tjb-value{position:relative; z-index:4; margin:0 0 18px; font-size:13.5px; color:#c2d6c9}
+
+    /* ── Premium toggle (real checkbox, visually hidden) ── */
+    .tjb-toggle{position:relative; z-index:4; display:flex; align-items:center; gap:14px; cursor:pointer; min-height:44px; padding:6px 0}
+    .tjb-check{
+      position:absolute; opacity:0; width:1px; height:1px; margin:0; pointer-events:none;
+    }
+    .tjb-switch{
+      flex:0 0 auto; width:52px; height:30px; border-radius:999px; position:relative;
+      background:linear-gradient(180deg,#0c0c0c,#141414); border:1px solid rgba(255,255,255,.18);
+      box-shadow:inset 0 1px 2px rgba(0,0,0,.7);
+      transition:background .2s ease, border-color .2s ease, box-shadow .2s ease;
+    }
+    .tjb-switch::after{
+      content:""; position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%;
+      background:linear-gradient(180deg,#fff,#c9cdd2);
+      box-shadow:0 1px 3px rgba(0,0,0,.6);
+      transition:transform .22s cubic-bezier(.2,.7,.3,1);
+    }
+    .tjb-check:checked + .tjb-switch{
+      background:linear-gradient(180deg,#12a353,#0a6d38);
+      border-color:rgba(125,255,168,.6);
+      box-shadow:inset 0 1px 2px rgba(0,0,0,.4), 0 0 14px rgba(15,157,79,.5);
+    }
+    .tjb-check:checked + .tjb-switch::after{transform:translateX(22px)}
+    .tjb-check:focus-visible + .tjb-switch{outline:2px solid var(--tjb-mint); outline-offset:3px}
+    .tjb-toggle-label{font-size:14.5px; font-weight:700; color:var(--tjb-heading)}
+    .tjb-toggle[aria-busy="true"]{opacity:.7; cursor:progress}
+
+    .tjb-status{position:relative; z-index:4; margin:10px 0 0; min-height:18px; font-size:12.5px}
+    .tjb-status.is-ok{color:var(--tjb-mint)}
+    .tjb-status.is-err{color:#ff9b9b}
+
+    .tjb-disc{position:relative; z-index:4; margin:16px 0 0; font-size:11px; line-height:1.5; color:var(--tjb-muted)}
+
+    @media (max-width:480px){
+      .tjb-gem{padding:20px 18px}
+      .tjb-title{font-size:16.5px}
+    }
+
+    /* Respect reduced motion: kill all diamond animation, keep it beautiful & static. */
+    @media (prefers-reduced-motion:reduce){
+      .tjb-gem::after, .tjb-caustic, .tjb-spark{animation:none}
+      .tjb-spark{opacity:.6}
+      .tjb-gem::after{transform:translateX(-30%) rotate(2deg); opacity:.5}
+      .tjb-switch::after{transition:none}
+    }
+  </style>
+
+  <div class="tjb-gem">
+    <span class="tjb-caustic" aria-hidden="true"></span>
+    <span class="tjb-spark s1" aria-hidden="true"></span>
+    <span class="tjb-spark s2" aria-hidden="true"></span>
+    <span class="tjb-spark s3" aria-hidden="true"></span>
+
+    <div class="tjb-head">
+      <span class="tjb-ribbon">{{ tjb_ribbon }}</span>
+      <span class="tjb-price"><span class="tjb-plus">+</span> {{ tjb_price | money }}</span>
+    </div>
+
+    <p class="tjb-title">{{ tjb_title }}</p>
+    <p class="tjb-value">{{ tjb_value }}</p>
+
+    <label class="tjb-toggle" data-tjb-toggle>
+      <input type="checkbox" class="tjb-check" data-tjb-check
+             data-variant="{{ tjb_variant }}"
+             aria-label="{{ tjb_toggle }} — {{ tjb_title }}, {{ tjb_price | money }}">
+      <span class="tjb-switch" aria-hidden="true"></span>
+      <span class="tjb-toggle-label">{{ tjb_toggle }}</span>
+    </label>
+
+    <p class="tjb-status" data-tjb-status role="status" aria-live="polite"></p>
+
+    <p class="tjb-disc">
+      Educational material only — not financial advice. Trading index futures carries
+      substantial risk of loss.
+    </p>
+  </div>
+
+  <script>
+    (function(){
+      var root = (document.currentScript && document.currentScript.closest('.tjb-wrap'))
+               || document.querySelector('.tjb-wrap');
+      if(!root) return;
+      var toggle = root.querySelector('[data-tjb-toggle]');
+      var check  = root.querySelector('[data-tjb-check]');
+      var status = root.querySelector('[data-tjb-status]');
+      if(!check) return;
+
+      function setStatus(msg, kind){
+        status.textContent = msg || '';
+        status.className = 'tjb-status' + (kind ? ' is-' + kind : '');
+      }
+      function refreshCart(){
+        ['cart:refresh','cart:build','ajaxProduct:added'].forEach(function(name){
+          document.dispatchEvent(new CustomEvent(name, {bubbles:true}));
+        });
+        var drawer = document.querySelector('cart-drawer, #CartDrawer, .cart-drawer, [data-cart-drawer]');
+        if(drawer && typeof drawer.open === 'function'){ try{ drawer.open(); }catch(e){} }
+      }
+
+      var variant = Number(check.getAttribute('data-variant'));
+
+      check.addEventListener('change', function(){
+        var adding = check.checked;
+        check.disabled = true;
+        toggle.setAttribute('aria-busy','true');
+        setStatus(adding ? 'Adding to your order…' : 'Removing…');
+
+        var req = adding
+          ? fetch('/cart/add.js', {
+              method:'POST',
+              headers:{'Content-Type':'application/json','Accept':'application/json'},
+              body: JSON.stringify({ items:[{ id: variant, quantity: 1 }] })
+            })
+          // /cart/change.js with a variant id + quantity 0 removes that line.
+          : fetch('/cart/change.js', {
+              method:'POST',
+              headers:{'Content-Type':'application/json','Accept':'application/json'},
+              body: JSON.stringify({ id: String(variant), quantity: 0 })
+            });
+
+        req.then(function(res){
+            if(!res.ok){ return res.json().then(function(d){ throw new Error(d.description || 'Cart update failed'); }); }
+            return res.json();
+          })
+          .then(function(){
+            setStatus(adding ? 'Added to your order ✓' : 'Removed from order', adding ? 'ok' : null);
+            refreshCart();
+          })
+          .catch(function(err){
+            // Roll the toggle back so its state matches the real cart.
+            check.checked = !adding;
+            setStatus((err && err.message) ? err.message : 'Something went wrong. Please try again.', 'err');
+          })
+          .finally(function(){
+            check.disabled = false;
+            toggle.removeAttribute('aria-busy');
+          });
+      });
+    })();
+  </script>
+</div>

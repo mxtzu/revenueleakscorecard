@@ -1,0 +1,253 @@
+{%- comment -%}
+  ============================================================================
+  BACKTESTING + PRE-TRADE CHECKLIST BUNDLE  —  prefix: .bcb-
+  TIER 1 · "Matte Steel"  (deliberately restrained: flat, static, businesslike)
+  ----------------------------------------------------------------------------
+  Paste this whole file's contents into a Custom Liquid block on the product/
+  bundle page. It is fully self-contained: its own CSS, markup and JS, all
+  namespaced under .bcb- so it never clashes with the other snippets.
+
+  Adds BOTH variants to the cart in a single AJAX request.
+  NOTE: a true in-checkout order bump requires Shopify Plus + Checkout UI
+  Extensions. This is the product-page AJAX version.
+  ============================================================================
+{%- endcomment -%}
+
+{%- comment -%} ─────────────── CONFIG (edit these) ─────────────── {%- endcomment -%}
+{%- comment -%} Product handles (for admin reference / linking only). {%- endcomment -%}
+{%- assign bcb_workbook_handle  = 'backtesting-workbook' -%}
+{%- assign bcb_checklist_handle = 'pre-trade-checklist' -%}
+
+{%- comment -%} Variant IDs — paste the REAL numeric variant IDs from Shopify. {%- endcomment -%}
+{%- assign bcb_workbook_variant  = 00000000000001 -%}
+{%- assign bcb_checklist_variant = 00000000000002 -%}
+
+{%- comment -%} Prices in the smallest currency unit (pence). £24.00 = 2400. {%- endcomment -%}
+{%- assign bcb_workbook_price  = 2400 -%}   {%- comment -%} individual price of the Workbook {%- endcomment -%}
+{%- assign bcb_checklist_price = 1200 -%}   {%- comment -%} individual price of the Checklist {%- endcomment -%}
+{%- assign bcb_bundle_price    = 2900 -%}   {%- comment -%} what you charge for the bundle {%- endcomment -%}
+
+{%- comment -%} Copy {%- endcomment -%}
+{%- assign bcb_eyebrow      = 'Entry bundle' -%}
+{%- assign bcb_heading      = 'Backtesting Workbook + Pre-Trade Checklist' -%}
+{%- assign bcb_subheading   = 'The two tools that turn the strategy into a repeatable process.' -%}
+{%- assign bcb_item1_title  = 'Backtesting Workbook & Method' -%}
+{%- assign bcb_item1_benefit= 'A structured way to test the reversal rules against your own historical data.' -%}
+{%- assign bcb_item2_title  = 'Pre-Trade Checklist' -%}
+{%- assign bcb_item2_benefit= 'An interactive gate you run before every entry so setups are confirmed, not felt.' -%}
+{%- assign bcb_cta_label    = 'Add bundle to cart' -%}
+
+{%- comment -%} ─────────────── REAL SAVING (computed, never hard-coded) ─────────────── {%- endcomment -%}
+{%- assign bcb_sum    = bcb_workbook_price | plus: bcb_checklist_price -%}
+{%- assign bcb_saving = bcb_sum | minus: bcb_bundle_price -%}
+
+<div class="bcb-wrap">
+  <style>
+    /* All selectors scoped under .bcb-wrap — zero global bleed. */
+    .bcb-wrap{
+      --bcb-bg:#0c0c0c; --bcb-body:#aeb4ba; --bcb-muted:#8b939b; --bcb-heading:#eef1f4;
+      --bcb-green:#0f9d4f; --bcb-line:rgba(255,255,255,.10); --bcb-line-h:rgba(15,157,79,.5);
+      display:block; margin:0 auto; max-width:640px;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      color:var(--bcb-body); line-height:1.55; -webkit-font-smoothing:antialiased;
+    }
+    .bcb-wrap *{box-sizing:border-box}
+
+    .bcb-card{
+      position:relative; border-radius:14px; padding:26px 24px;
+      /* Matte steel: flat dark card, thin silver border, NO glow/animation. */
+      background:linear-gradient(160deg,#141414,#0a0a0a);
+      border:1px solid var(--bcb-line);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    .bcb-eyebrow{
+      display:inline-block; font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+      font-weight:700; color:var(--bcb-muted);
+      border:1px solid var(--bcb-line); border-radius:999px; padding:5px 11px; margin:0 0 14px;
+    }
+    .bcb-heading{
+      margin:0 0 6px; font-size:21px; line-height:1.25; font-weight:700; color:var(--bcb-heading);
+    }
+    .bcb-sub{margin:0 0 20px; font-size:14px; color:var(--bcb-muted)}
+
+    .bcb-items{display:grid; gap:12px; margin:0 0 20px}
+    .bcb-item{
+      display:grid; grid-template-columns:40px 1fr; gap:14px; align-items:start;
+      padding:14px; border-radius:12px;
+      background:rgba(255,255,255,.02); border:1px solid var(--bcb-line);
+    }
+    .bcb-ico{
+      width:40px; height:40px; display:grid; place-items:center; border-radius:10px;
+      background:#0e0e0e; border:1px solid var(--bcb-line); color:#c7ccd1;
+    }
+    .bcb-ico svg{width:20px; height:20px; display:block}
+    .bcb-item-title{margin:1px 0 3px; font-size:14.5px; font-weight:600; color:var(--bcb-heading)}
+    .bcb-item-benefit{margin:0; font-size:13px; color:var(--bcb-muted)}
+
+    .bcb-pricing{
+      display:flex; flex-wrap:wrap; align-items:baseline; gap:10px 14px;
+      padding:16px 0; margin:0 0 18px; border-top:1px solid var(--bcb-line);
+    }
+    .bcb-was{font-size:14px; color:var(--bcb-muted); text-decoration:line-through; text-decoration-color:rgba(255,255,255,.35)}
+    .bcb-now{font-size:24px; font-weight:800; color:var(--bcb-heading); letter-spacing:.01em}
+    .bcb-save{
+      font-size:12px; font-weight:700; letter-spacing:.02em; color:#bfe9cf;
+      border:1px solid rgba(15,157,79,.4); background:rgba(15,157,79,.10);
+      border-radius:999px; padding:5px 11px;
+    }
+
+    .bcb-cta{
+      appearance:none; -webkit-appearance:none; cursor:pointer;
+      width:100%; min-height:48px; padding:13px 18px; border-radius:12px;
+      font-size:15px; font-weight:700; letter-spacing:.01em; color:#f2fff7;
+      background:linear-gradient(180deg,#12a353,#0a6d38);
+      border:1px solid rgba(15,157,79,.55);
+      transition:filter .15s ease, transform .05s ease;
+    }
+    .bcb-cta:hover{filter:brightness(1.06)}
+    .bcb-cta:active{transform:translateY(1px)}
+    .bcb-cta[disabled]{opacity:.6; cursor:not-allowed}
+    .bcb-cta:focus-visible{outline:2px solid #7dffa8; outline-offset:2px}
+
+    .bcb-status{margin:12px 0 0; min-height:18px; font-size:13px; text-align:center}
+    .bcb-status.is-ok{color:#7dffa8}
+    .bcb-status.is-err{color:#ff9b9b}
+
+    .bcb-disc{margin:16px 2px 0; font-size:11.5px; line-height:1.5; color:var(--bcb-muted)}
+
+    .bcb-card:hover{border-color:var(--bcb-line-h)}
+
+    @media (max-width:480px){
+      .bcb-card{padding:22px 18px}
+      .bcb-heading{font-size:19px}
+    }
+    @media (prefers-reduced-motion:reduce){
+      .bcb-cta{transition:none}
+    }
+  </style>
+
+  <div class="bcb-card">
+    <span class="bcb-eyebrow">{{ bcb_eyebrow }}</span>
+    <h3 class="bcb-heading">{{ bcb_heading }}</h3>
+    <p class="bcb-sub">{{ bcb_subheading }}</p>
+
+    <div class="bcb-items">
+      <div class="bcb-item">
+        <span class="bcb-ico" aria-hidden="true">
+          {%- comment -%} chart / backtest icon {%- endcomment -%}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l3-4 3 2 4-6"/></svg>
+        </span>
+        <div>
+          <p class="bcb-item-title">{{ bcb_item1_title }}</p>
+          <p class="bcb-item-benefit">{{ bcb_item1_benefit }}</p>
+        </div>
+      </div>
+      <div class="bcb-item">
+        <span class="bcb-ico" aria-hidden="true">
+          {%- comment -%} checklist icon {%- endcomment -%}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11"/><path d="M9 12h11"/><path d="M9 18h11"/><path d="M4 6l1 1 2-2"/><path d="M4 12l1 1 2-2"/><path d="M4 18l1 1 2-2"/></svg>
+        </span>
+        <div>
+          <p class="bcb-item-title">{{ bcb_item2_title }}</p>
+          <p class="bcb-item-benefit">{{ bcb_item2_benefit }}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bcb-pricing">
+      {%- if bcb_saving > 0 -%}
+        <span class="bcb-was">{{ bcb_sum | money }}</span>
+      {%- endif -%}
+      <span class="bcb-now">{{ bcb_bundle_price | money }}</span>
+      {%- if bcb_saving > 0 -%}
+        <span class="bcb-save">You save {{ bcb_saving | money }}</span>
+      {%- endif -%}
+    </div>
+
+    <button
+      type="button"
+      class="bcb-cta"
+      data-bcb-add
+      data-variant-a="{{ bcb_workbook_variant }}"
+      data-variant-b="{{ bcb_checklist_variant }}"
+      aria-label="{{ bcb_cta_label }}">
+      {{ bcb_cta_label }}
+    </button>
+
+    <p class="bcb-status" data-bcb-status role="status" aria-live="polite"></p>
+
+    <p class="bcb-disc">
+      Educational material only — not financial advice. Trading index futures carries
+      substantial risk of loss.
+    </p>
+  </div>
+
+  <script>
+    (function(){
+      var root = (document.currentScript && document.currentScript.closest('.bcb-wrap'))
+               || document.querySelector('.bcb-wrap');
+      if(!root) return;
+      var btn    = root.querySelector('[data-bcb-add]');
+      var status = root.querySelector('[data-bcb-status]');
+      if(!btn) return;
+
+      function setStatus(msg, kind){
+        status.textContent = msg || '';
+        status.className = 'bcb-status' + (kind ? ' is-' + kind : '');
+      }
+
+      // Refresh a theme cart drawer if one is exposed; otherwise go to /cart.
+      function refreshCart(){
+        var refreshed = false;
+        // Common theme events — harmless if nobody is listening.
+        ['cart:refresh','cart:build','ajaxProduct:added'].forEach(function(name){
+          document.dispatchEvent(new CustomEvent(name, {bubbles:true}));
+        });
+        // Dawn-style publish bus, if present.
+        try{
+          if(window.Shopify && window.Shopify.theme && typeof PubSub !== 'undefined'){ refreshed = true; }
+        }catch(e){}
+        // Try to open a known drawer element.
+        var drawer = document.querySelector('cart-drawer, #CartDrawer, .cart-drawer, [data-cart-drawer]');
+        if(drawer){
+          refreshed = true;
+          if(typeof drawer.open === 'function'){ try{ drawer.open(); }catch(e){} }
+          drawer.classList.add('active','is-open','open');
+        }
+        if(!refreshed){ window.location.href = '/cart'; }
+      }
+
+      btn.addEventListener('click', function(){
+        var a = btn.getAttribute('data-variant-a');
+        var b = btn.getAttribute('data-variant-b');
+        var original = btn.textContent;
+        btn.disabled = true;
+        setStatus('Adding to cart…');
+
+        fetch('/cart/add.js', {
+          method:'POST',
+          headers:{'Content-Type':'application/json','Accept':'application/json'},
+          body: JSON.stringify({ items:[
+            { id: Number(a), quantity: 1 },
+            { id: Number(b), quantity: 1 }
+          ]})
+        })
+        .then(function(res){
+          if(!res.ok){ return res.json().then(function(d){ throw new Error(d.description || 'Could not add bundle'); }); }
+          return res.json();
+        })
+        .then(function(){
+          setStatus('Added to cart ✓', 'ok');
+          refreshCart();
+        })
+        .catch(function(err){
+          setStatus((err && err.message) ? err.message : 'Something went wrong. Please try again.', 'err');
+        })
+        .finally(function(){
+          btn.disabled = false;
+          btn.textContent = original;
+        });
+      });
+    })();
+  </script>
+</div>

@@ -1,0 +1,142 @@
+{%- comment -%}
+  ============================================================================
+  BACKTESTING WORKBOOK  —  feature/benefit content block  —  prefix: .btw-
+  Base design system (no tier escalation, no cart button).
+  ----------------------------------------------------------------------------
+  Paste into a Custom Liquid block anywhere you describe the Workbook.
+  Self-contained: own CSS/markup, all scoped under .btw-. No JS needed.
+  ============================================================================
+{%- endcomment -%}
+
+{%- comment -%} ─────────────── CONFIG (edit these) ─────────────── {%- endcomment -%}
+{%- assign btw_eyebrow  = 'Backtesting Workbook & Method' -%}
+{%- assign btw_heading  = 'Prove the edge before you risk a penny on it.' -%}
+{%- assign btw_intro    = 'A structured method — not a vague spreadsheet — for testing the Liquidity Reversal rules against real historical price on ES and NASDAQ futures.' -%}
+
+{%- comment -%} Each benefit row: title + one honest, process-focused line. {%- endcomment -%}
+{%- assign btw_b1_title = 'Prove the edge in your own data' -%}
+{%- assign btw_b1_body  = 'Test the reversal criteria on your own charts so the rules are something you have seen work, not something you were told.' -%}
+{%- assign btw_b2_title = 'A repeatable, step-by-step process' -%}
+{%- assign btw_b2_body  = 'A defined sequence for logging each historical setup the same way every time, so your results mean something.' -%}
+{%- assign btw_b3_title = 'Sample-size milestones' -%}
+{%- assign btw_b3_body  = 'Clear checkpoints for how many setups to review before you trust a read — building patience into the method itself.' -%}
+{%- assign btw_b4_title = 'Feeds straight into the journal' -%}
+{%- assign btw_b4_body  = 'The workbook is structured so your backtest findings drop cleanly into the live Trade Journal for ongoing review.' -%}
+
+<div class="btw-wrap">
+  <style>
+    .btw-wrap{
+      --btw-body:#aeb4ba; --btw-muted:#8b939b; --btw-heading:#eef1f4;
+      --btw-green:#0f9d4f; --btw-line:rgba(255,255,255,.10);
+      display:block; margin:0 auto; max-width:680px;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      color:var(--btw-body); line-height:1.6; -webkit-font-smoothing:antialiased;
+    }
+    .btw-wrap *{box-sizing:border-box}
+
+    .btw-panel{
+      border-radius:14px; padding:28px 24px;
+      background:
+        linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,0) 42%),
+        linear-gradient(160deg,#141414,#0a0a0a);
+      border:1px solid var(--btw-line);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 6px 20px rgba(0,0,0,.5);
+    }
+    .btw-eyebrow{
+      display:inline-block; font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+      font-weight:700; color:#9aa1a8;
+      border:1px solid var(--btw-line); border-radius:999px; padding:5px 11px; margin:0 0 14px;
+    }
+    /* Metallic silver clipped to text for the headline. */
+    .btw-heading{
+      margin:0 0 10px; font-size:23px; line-height:1.22; font-weight:800;
+      background:linear-gradient(180deg,#fff,#e6e8ea 45%,#b9bdc2 60%,#fff);
+      -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:#eef1f4;
+    }
+    .btw-intro{margin:0 0 22px; font-size:14.5px; color:var(--btw-muted)}
+
+    .btw-rows{display:grid; gap:14px; margin:0}
+    .btw-row{
+      display:grid; grid-template-columns:44px 1fr; gap:16px; align-items:start;
+    }
+    .btw-ico{
+      width:44px; height:44px; display:grid; place-items:center; border-radius:11px;
+      background:linear-gradient(160deg,#161616,#0c0c0c);
+      border:1px solid var(--btw-line); color:#7dffa8;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    .btw-ico svg{width:22px; height:22px; display:block}
+    .btw-row-title{
+      margin:2px 0 4px; font-size:15px; font-weight:700;
+      background:linear-gradient(180deg,#fff,#e6e8ea 45%,#b9bdc2 60%,#fff);
+      -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:#eef1f4;
+    }
+    .btw-row-body{margin:0; font-size:13.5px; color:var(--btw-muted)}
+
+    .btw-disc{margin:22px 2px 0; font-size:11.5px; line-height:1.5; color:var(--btw-muted); border-top:1px solid var(--btw-line); padding-top:16px}
+
+    @media (max-width:480px){
+      .btw-panel{padding:24px 18px}
+      .btw-heading{font-size:20px}
+      .btw-row{grid-template-columns:40px 1fr; gap:13px}
+      .btw-ico{width:40px; height:40px}
+    }
+  </style>
+
+  <div class="btw-panel">
+    <span class="btw-eyebrow">{{ btw_eyebrow }}</span>
+    <h3 class="btw-heading">{{ btw_heading }}</h3>
+    <p class="btw-intro">{{ btw_intro }}</p>
+
+    <div class="btw-rows">
+      <div class="btw-row">
+        <span class="btw-ico" aria-hidden="true">
+          {%- comment -%} magnifier-over-chart {%- endcomment -%}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-3.5-3.5"/><path d="M8.5 12l2-2 1.5 1.5 2.5-3"/></svg>
+        </span>
+        <div>
+          <p class="btw-row-title">{{ btw_b1_title }}</p>
+          <p class="btw-row-body">{{ btw_b1_body }}</p>
+        </div>
+      </div>
+
+      <div class="btw-row">
+        <span class="btw-ico" aria-hidden="true">
+          {%- comment -%} repeat / process {%- endcomment -%}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9a8 8 0 0113.3-3.3L20 8"/><path d="M20 4v4h-4"/><path d="M20 15a8 8 0 01-13.3 3.3L4 16"/><path d="M4 20v-4h4"/></svg>
+        </span>
+        <div>
+          <p class="btw-row-title">{{ btw_b2_title }}</p>
+          <p class="btw-row-body">{{ btw_b2_body }}</p>
+        </div>
+      </div>
+
+      <div class="btw-row">
+        <span class="btw-ico" aria-hidden="true">
+          {%- comment -%} milestones / steps {%- endcomment -%}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><rect x="5" y="13" width="4" height="7"/><rect x="10" y="9" width="4" height="11"/><rect x="15" y="5" width="4" height="15"/></svg>
+        </span>
+        <div>
+          <p class="btw-row-title">{{ btw_b3_title }}</p>
+          <p class="btw-row-body">{{ btw_b3_body }}</p>
+        </div>
+      </div>
+
+      <div class="btw-row">
+        <span class="btw-ico" aria-hidden="true">
+          {%- comment -%} arrow into ledger {%- endcomment -%}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8"/><path d="M8 13h5"/><path d="M13 17l3-3-3-3"/></svg>
+        </span>
+        <div>
+          <p class="btw-row-title">{{ btw_b4_title }}</p>
+          <p class="btw-row-body">{{ btw_b4_body }}</p>
+        </div>
+      </div>
+    </div>
+
+    <p class="btw-disc">
+      Educational material only — not financial advice. Trading index futures carries
+      substantial risk of loss.
+    </p>
+  </div>
+</div>
