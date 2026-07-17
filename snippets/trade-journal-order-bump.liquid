@@ -238,13 +238,9 @@
         status.className = 'tjb-status' + (kind ? ' is-' + kind : '');
       }
 
-      // Locate the theme's main product form (the one with a variant id field).
-      function mainForm(){
-        var forms = document.querySelectorAll(MAIN_FORM_SELECTOR);
-        for(var i=0;i<forms.length;i++){
-          if(forms[i].querySelector('[name="id"]')) return forms[i];
-        }
-        return null;
+      // Is this element the theme's main product form (has a variant id field)?
+      function isMainForm(f){
+        return !!(f && f.matches && f.matches(MAIN_FORM_SELECTOR) && f.querySelector('[name="id"]'));
       }
 
       // Turn the main product form into a /cart/add.js line item, preserving
@@ -279,80 +275,69 @@
         }
       }
 
-      var form = mainForm();
+      /* The toggle ONLY records intent — nothing is added to the cart when it is
+         ticked. The bump is added when the customer presses the theme's Add to Cart. */
+      check.addEventListener('change', function(){
+        setStatus(
+          check.checked ? 'The Trade Journal will be added when you press Add to Cart.' : '',
+          check.checked ? 'ok' : null
+        );
+      });
 
-      if(form){
-        /* ── Preferred behaviour ──────────────────────────────────────────────
-           The toggle only records intent. When the customer presses the theme's
-           Add to Cart, we take over that one action and add BOTH the main product
-           and (if ticked) the Trade Journal in a single /cart/add.js call, then
-           route to the cart so the bump is part of the checkout / Apple Pay total. */
+      // Take over one Add-to-Cart action: add the main product AND (if ticked) the
+      // Journal in a single /cart/add.js call, then route to the cart so the bump is
+      // part of the checkout / Apple Pay total.
+      function takeover(e, f){
+        if(!check.checked) return;        // bump not wanted → let the theme add normally
+        var main = mainLine(f);
+        if(!main) return;
+        if(busy){ e.preventDefault(); return; }
+        e.preventDefault();
+        e.stopImmediatePropagation();     // stop the theme's own add handler for this action
+        busy = true;
+        check.disabled = true;
+        setStatus('Adding to cart…');
 
-        check.addEventListener('change', function(){
-          setStatus(
-            check.checked ? 'The Trade Journal will be added when you press Add to Cart.' : '',
-            check.checked ? 'ok' : null
-          );
-        });
-
-        var takeover = function(e){
-          if(!check.checked) return;        // bump not wanted → let the theme add normally
-          var f = mainForm();
-          if(!f) return;
-          var main = mainLine(f);
-          if(!main) return;
-          if(busy){ e.preventDefault(); return; }
-          e.preventDefault();
-          e.stopImmediatePropagation();     // stop the theme's own add handler for this click
-          busy = true;
-          check.disabled = true;
-          setStatus('Adding to cart…');
-
-          fetch('/cart/add.js', {
-            method:'POST',
-            headers:{'Content-Type':'application/json','Accept':'application/json'},
-            body: JSON.stringify({ items:[ main, { id: variant, quantity: 1 } ] })
-          })
-          .then(function(res){
-            if(!res.ok){ return res.json().then(function(d){ throw new Error(d.description || 'Could not add to cart'); }); }
-            return res.json();
-          })
-          .then(function(){
-            setStatus('Added to cart ✓', 'ok');
-            if(AFTER_ADD === 'drawer'){ openDrawerOrCart(); }
-            else { window.location.href = '/cart'; }
-          })
-          .catch(function(err){
-            setStatus((err && err.message) ? err.message : 'Something went wrong. Please try again.', 'err');
-            // Don't block the sale: fall back to a normal submit so the main product still adds.
-            busy = false; check.disabled = false;
-            try{ f.submit(); }catch(_){}
-          });
-        };
-
-        // Hook both the submit and the Add button click (capture phase) so we run
-        // before the theme, whichever event it relies on.
-        form.addEventListener('submit', takeover, true);
-        var addBtn = form.querySelector('[name="add"], [type="submit"]');
-        if(addBtn){ addBtn.addEventListener('click', takeover, true); }
-
-      } else {
-        /* ── Fallback ─────────────────────────────────────────────────────────
-           If the theme's product form can't be found, we can't hook Add to Cart,
-           so the toggle adds/removes the bump directly via AJAX (its own line). */
-        check.addEventListener('change', function(){
-          var adding = check.checked;
-          check.disabled = true; toggle.setAttribute('aria-busy','true');
-          setStatus(adding ? 'Adding to your order…' : 'Removing…');
-          var req = adding
-            ? fetch('/cart/add.js', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify({ items:[{ id: variant, quantity: 1 }] }) })
-            : fetch('/cart/change.js', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify({ id: String(variant), quantity: 0 }) });
-          req.then(function(res){ if(!res.ok){ return res.json().then(function(d){ throw new Error(d.description || 'Cart update failed'); }); } return res.json(); })
-            .then(function(){ setStatus(adding ? 'Added to your order ✓' : 'Removed from order', adding ? 'ok' : null); openDrawerOrCart(); })
-            .catch(function(err){ check.checked = !adding; setStatus((err && err.message) ? err.message : 'Something went wrong. Please try again.', 'err'); })
-            .finally(function(){ check.disabled = false; toggle.removeAttribute('aria-busy'); });
+        fetch('/cart/add.js', {
+          method:'POST',
+          headers:{'Content-Type':'application/json','Accept':'application/json'},
+          body: JSON.stringify({ items:[ main, { id: variant, quantity: 1 } ] })
+        })
+        .then(function(res){
+          if(!res.ok){ return res.json().then(function(d){ throw new Error(d.description || 'Could not add to cart'); }); }
+          return res.json();
+        })
+        .then(function(){
+          setStatus('Added to cart ✓', 'ok');
+          if(AFTER_ADD === 'drawer'){ openDrawerOrCart(); }
+          else { window.location.href = '/cart'; }
+        })
+        .catch(function(err){
+          setStatus((err && err.message) ? err.message : 'Something went wrong. Please try again.', 'err');
+          // Don't block the sale: fall back to a normal submit so the main product still adds.
+          busy = false; check.disabled = false;
+          try{ f.submit(); }catch(_){}
         });
       }
+
+      /* Delegate from `document` in the CAPTURE phase. This is the key fix: the
+         Custom Liquid block usually sits ABOVE the theme's Add-to-Cart form, so the
+         form does not exist yet when this script runs. Delegating means we catch the
+         add whenever/however it fires — no dependency on DOM order or theme load
+         timing. We handle both the form submit and the Add button click; whichever
+         the theme uses, we run first and preventDefault stops the other from firing. */
+      document.addEventListener('submit', function(e){
+        if(isMainForm(e.target)) takeover(e, e.target);
+      }, true);
+
+      document.addEventListener('click', function(e){
+        var btn = e.target && e.target.closest
+          ? e.target.closest('[name="add"], button[type="submit"], input[type="submit"]')
+          : null;
+        if(!btn) return;
+        var f = btn.form || (btn.closest ? btn.closest('form') : null);
+        if(isMainForm(f)) takeover(e, f);
+      }, true);
     })();
   </script>
 </div>
