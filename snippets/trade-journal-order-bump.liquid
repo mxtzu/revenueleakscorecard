@@ -3,11 +3,18 @@
   TRADE JOURNAL ORDER BUMP  —  prefix: .tjb-
   TIER 2 · "Diamond"  (gem-cut card, glassy moving sheen, CSS-only sparkle)
   ----------------------------------------------------------------------------
-  Sits directly under the main Add-to-Cart. Ticking the premium toggle adds the
-  Journal variant via AJAX; unticking removes it.
+  Sits directly under the main Add-to-Cart. Ticking the premium toggle only marks
+  intent — the Journal is added to the cart TOGETHER with the main product when
+  the customer presses the theme's Add to Cart. The customer is then routed to the
+  cart (AFTER_ADD='cart'), where the cart's express buttons (Apple Pay / Shop Pay)
+  include the bump in the total.
 
-  NOTE: a TRUE in-checkout order bump needs Shopify Plus + Checkout UI
-  Extensions. This is the product-page AJAX version.
+  IMPORTANT — express checkout limitation: the PRODUCT-PAGE express buttons
+  ("Buy with Shop" / Apple Pay under Add-to-Cart) check out only the single form
+  product and CANNOT include a separate bump on a non-Plus store. Only the CART's
+  express buttons include it — which is why we route to /cart after adding.
+  A TRUE in-checkout order bump (shown inside checkout itself) needs Shopify Plus +
+  Checkout UI Extensions.
 
   Self-contained: own CSS/markup/JS, all scoped under .tjb-. Keyframes are
   namespaced (tjb-sheen, tjb-sparkle, tjb-caustic) so nothing clashes.
@@ -203,6 +210,18 @@
 
   <script>
     (function(){
+      /* ─────────────── JS CONFIG (adjust only if your theme differs) ───────────────
+         MAIN_FORM_SELECTOR: how we find the theme's main Add-to-Cart product form.
+           The default matches the standard Shopify product form. Only change this
+           if your theme's product form uses a different action.
+         AFTER_ADD: what happens after the customer presses Add to Cart with the bump
+           ticked. 'cart' (default) sends them to /cart, where the express Apple Pay /
+           Shop Pay button includes the bump in the total. 'drawer' instead tries to
+           open the theme's cart drawer (note: the product-page express buttons still
+           can NOT include the bump — only the cart's express buttons can). */
+      var MAIN_FORM_SELECTOR = 'form[action*="/cart/add"]';
+      var AFTER_ADD = 'cart';
+
       var root = (document.currentScript && document.currentScript.closest('.tjb-wrap'))
                || document.querySelector('.tjb-wrap');
       if(!root) return;
@@ -211,57 +230,129 @@
       var status = root.querySelector('[data-tjb-status]');
       if(!check) return;
 
+      var variant = Number(check.getAttribute('data-variant'));
+      var busy = false;
+
       function setStatus(msg, kind){
         status.textContent = msg || '';
         status.className = 'tjb-status' + (kind ? ' is-' + kind : '');
       }
-      function refreshCart(){
+
+      // Locate the theme's main product form (the one with a variant id field).
+      function mainForm(){
+        var forms = document.querySelectorAll(MAIN_FORM_SELECTOR);
+        for(var i=0;i<forms.length;i++){
+          if(forms[i].querySelector('[name="id"]')) return forms[i];
+        }
+        return null;
+      }
+
+      // Turn the main product form into a /cart/add.js line item, preserving
+      // quantity, line-item properties and any selling plan the theme set.
+      function mainLine(f){
+        var fd = new FormData(f);
+        var id = fd.get('id');
+        if(!id) return null;
+        var item = { id: Number(id), quantity: Number(fd.get('quantity') || 1) };
+        var props = {};
+        fd.forEach(function(val, key){
+          var m = /^properties\[(.+)\]$/.exec(key);
+          if(m){ props[m[1]] = val; }
+        });
+        if(Object.keys(props).length){ item.properties = props; }
+        var sp = fd.get('selling_plan');
+        if(sp){ item.selling_plan = Number(sp); }
+        return item;
+      }
+
+      function openDrawerOrCart(){
         ['cart:refresh','cart:build','ajaxProduct:added'].forEach(function(name){
           document.dispatchEvent(new CustomEvent(name, {bubbles:true}));
         });
         var drawer = document.querySelector('cart-drawer, #CartDrawer, .cart-drawer, [data-cart-drawer]');
-        if(drawer && typeof drawer.open === 'function'){ try{ drawer.open(); }catch(e){} }
+        if(drawer){
+          if(typeof drawer.open === 'function'){ try{ drawer.open(); }catch(e){} }
+          drawer.classList.add('active','is-open','open');
+          busy = false; check.disabled = false;
+        } else {
+          window.location.href = '/cart';
+        }
       }
 
-      var variant = Number(check.getAttribute('data-variant'));
+      var form = mainForm();
 
-      check.addEventListener('change', function(){
-        var adding = check.checked;
-        check.disabled = true;
-        toggle.setAttribute('aria-busy','true');
-        setStatus(adding ? 'Adding to your order…' : 'Removing…');
+      if(form){
+        /* ── Preferred behaviour ──────────────────────────────────────────────
+           The toggle only records intent. When the customer presses the theme's
+           Add to Cart, we take over that one action and add BOTH the main product
+           and (if ticked) the Trade Journal in a single /cart/add.js call, then
+           route to the cart so the bump is part of the checkout / Apple Pay total. */
 
-        var req = adding
-          ? fetch('/cart/add.js', {
-              method:'POST',
-              headers:{'Content-Type':'application/json','Accept':'application/json'},
-              body: JSON.stringify({ items:[{ id: variant, quantity: 1 }] })
-            })
-          // /cart/change.js with a variant id + quantity 0 removes that line.
-          : fetch('/cart/change.js', {
-              method:'POST',
-              headers:{'Content-Type':'application/json','Accept':'application/json'},
-              body: JSON.stringify({ id: String(variant), quantity: 0 })
-            });
+        check.addEventListener('change', function(){
+          setStatus(
+            check.checked ? 'The Trade Journal will be added when you press Add to Cart.' : '',
+            check.checked ? 'ok' : null
+          );
+        });
 
-        req.then(function(res){
-            if(!res.ok){ return res.json().then(function(d){ throw new Error(d.description || 'Cart update failed'); }); }
+        var takeover = function(e){
+          if(!check.checked) return;        // bump not wanted → let the theme add normally
+          var f = mainForm();
+          if(!f) return;
+          var main = mainLine(f);
+          if(!main) return;
+          if(busy){ e.preventDefault(); return; }
+          e.preventDefault();
+          e.stopImmediatePropagation();     // stop the theme's own add handler for this click
+          busy = true;
+          check.disabled = true;
+          setStatus('Adding to cart…');
+
+          fetch('/cart/add.js', {
+            method:'POST',
+            headers:{'Content-Type':'application/json','Accept':'application/json'},
+            body: JSON.stringify({ items:[ main, { id: variant, quantity: 1 } ] })
+          })
+          .then(function(res){
+            if(!res.ok){ return res.json().then(function(d){ throw new Error(d.description || 'Could not add to cart'); }); }
             return res.json();
           })
           .then(function(){
-            setStatus(adding ? 'Added to your order ✓' : 'Removed from order', adding ? 'ok' : null);
-            refreshCart();
+            setStatus('Added to cart ✓', 'ok');
+            if(AFTER_ADD === 'drawer'){ openDrawerOrCart(); }
+            else { window.location.href = '/cart'; }
           })
           .catch(function(err){
-            // Roll the toggle back so its state matches the real cart.
-            check.checked = !adding;
             setStatus((err && err.message) ? err.message : 'Something went wrong. Please try again.', 'err');
-          })
-          .finally(function(){
-            check.disabled = false;
-            toggle.removeAttribute('aria-busy');
+            // Don't block the sale: fall back to a normal submit so the main product still adds.
+            busy = false; check.disabled = false;
+            try{ f.submit(); }catch(_){}
           });
-      });
+        };
+
+        // Hook both the submit and the Add button click (capture phase) so we run
+        // before the theme, whichever event it relies on.
+        form.addEventListener('submit', takeover, true);
+        var addBtn = form.querySelector('[name="add"], [type="submit"]');
+        if(addBtn){ addBtn.addEventListener('click', takeover, true); }
+
+      } else {
+        /* ── Fallback ─────────────────────────────────────────────────────────
+           If the theme's product form can't be found, we can't hook Add to Cart,
+           so the toggle adds/removes the bump directly via AJAX (its own line). */
+        check.addEventListener('change', function(){
+          var adding = check.checked;
+          check.disabled = true; toggle.setAttribute('aria-busy','true');
+          setStatus(adding ? 'Adding to your order…' : 'Removing…');
+          var req = adding
+            ? fetch('/cart/add.js', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify({ items:[{ id: variant, quantity: 1 }] }) })
+            : fetch('/cart/change.js', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify({ id: String(variant), quantity: 0 }) });
+          req.then(function(res){ if(!res.ok){ return res.json().then(function(d){ throw new Error(d.description || 'Cart update failed'); }); } return res.json(); })
+            .then(function(){ setStatus(adding ? 'Added to your order ✓' : 'Removed from order', adding ? 'ok' : null); openDrawerOrCart(); })
+            .catch(function(err){ check.checked = !adding; setStatus((err && err.message) ? err.message : 'Something went wrong. Please try again.', 'err'); })
+            .finally(function(){ check.disabled = false; toggle.removeAttribute('aria-busy'); });
+        });
+      }
     })();
   </script>
 </div>
