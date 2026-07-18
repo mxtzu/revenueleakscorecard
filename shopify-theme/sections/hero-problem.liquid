@@ -1,0 +1,105 @@
+{%- comment -%}
+  01 — HERO (Problem hook, no product)
+  Belief installed: "My losses come from the trades I take, not the ones I miss."
+  Reads like a thought written at 2am, not an ad. Somber, high contrast.
+{%- endcomment -%}
+
+{%- assign s = section.settings -%}
+<section class="ascend-section hero-{{ section.id }}" aria-label="{{ s.aria_label | default: 'Opening' | escape }}">
+  <div class="ascend-wrap hero-{{ section.id }}__wrap">
+    {%- if s.kicker != blank -%}
+      <p class="ascend-eyebrow hero-{{ section.id }}__kicker">{{ s.kicker | escape }}</p>
+    {%- endif -%}
+
+    <h1 class="hero-{{ section.id }}__thought">
+      {{ s.lead_line }}
+    </h1>
+
+    {%- if s.subline != blank -%}
+      <p class="hero-{{ section.id }}__subline">{{ s.subline }}</p>
+    {%- endif -%}
+
+    {%- if s.reflect != blank -%}
+      <p class="hero-{{ section.id }}__reflect">{{ s.reflect }}</p>
+    {%- endif -%}
+
+    {%- if s.scroll_hint != blank -%}
+      <p class="hero-{{ section.id }}__hint" aria-hidden="true">{{ s.scroll_hint | escape }}</p>
+    {%- endif -%}
+  </div>
+</section>
+
+{%- style -%}
+  .hero-{{ section.id }} {
+    background: var(--ascend-bg, #0B0D10);
+    color: var(--ascend-body, #C4CAD3);
+    padding-block: clamp(5rem, 16vh, 9rem);
+    border-bottom: 1px solid var(--ascend-line, rgba(255,255,255,0.09));
+  }
+  .hero-{{ section.id }}__kicker { color: var(--ascend-muted, #8C94A0); }
+  .hero-{{ section.id }}__thought {
+    font-family: var(--ascend-serif, Georgia, serif);
+    font-weight: 400;
+    color: var(--ascend-ink, #EDF0F3);
+    font-size: clamp(1.9rem, 6.2vw, 3.4rem);
+    line-height: 1.14;
+    letter-spacing: -0.01em;
+    margin: 0;
+    max-width: 15ch;
+    text-wrap: balance;
+  }
+  .hero-{{ section.id }}__subline {
+    margin: 1.6rem 0 0;
+    font-size: clamp(1.05rem, 2.6vw, 1.28rem);
+    line-height: 1.55;
+    color: var(--ascend-body, #C4CAD3);
+    max-width: 46ch;
+  }
+  .hero-{{ section.id }}__reflect {
+    margin: 1.1rem 0 0;
+    font-size: 1.02rem;
+    line-height: 1.6;
+    color: var(--ascend-muted, #8C94A0);
+    max-width: 48ch;
+  }
+  .hero-{{ section.id }}__hint {
+    margin: 3rem 0 0;
+    font-size: 0.8rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ascend-muted, #8C94A0);
+    opacity: 0.7;
+  }
+{%- endstyle -%}
+
+{% schema %}
+{
+  "name": "01 Hero — Problem",
+  "tag": "section",
+  "class": "ascend-shell",
+  "settings": [
+    { "type": "text", "id": "kicker", "label": "Kicker (small label)", "default": "A note to myself" },
+    {
+      "type": "richtext",
+      "id": "lead_line",
+      "label": "Lead line (the thought)",
+      "default": "<p>No reason to trade off-plan. I do it anyway.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "subline",
+      "label": "Subline",
+      "default": "<p>You've read the whole thread. You know the setup isn't there. You size in anyway — smaller, telling yourself it's fine. It isn't fine, and you know that too.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "reflect",
+      "label": "Reflection line",
+      "default": "<p>The trades that empty the account aren't the ones you missed. They're the ones you took when you'd already decided not to.</p>"
+    },
+    { "type": "text", "id": "scroll_hint", "label": "Scroll hint", "default": "Keep reading" },
+    { "type": "text", "id": "aria_label", "label": "Section aria-label", "default": "Opening" }
+  ],
+  "presets": [{ "name": "01 Hero — Problem" }]
+}
+{% endschema %}

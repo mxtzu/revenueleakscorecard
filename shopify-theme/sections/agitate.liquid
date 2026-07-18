@@ -1,0 +1,150 @@
+{%- comment -%}
+  02 — AGITATE
+  Belief installed: "I'm disciplined everywhere else — so this isn't 'who I am'."
+  Validate the feeling; do NOT excuse the behaviour.
+{%- endcomment -%}
+
+{%- assign s = section.settings -%}
+<section class="ascend-section agitate-{{ section.id }}" aria-labelledby="agitate-{{ section.id }}-h">
+  <div class="ascend-wrap">
+    {%- if s.eyebrow != blank -%}
+      <p class="ascend-eyebrow">{{ s.eyebrow | escape }}</p>
+    {%- endif -%}
+
+    <h2 id="agitate-{{ section.id }}-h" class="agitate-{{ section.id }}__h">{{ s.heading }}</h2>
+
+    {%- if s.intro != blank -%}
+      <div class="agitate-{{ section.id }}__intro">{{ s.intro }}</div>
+    {%- endif -%}
+
+    {%- if section.blocks.size > 0 -%}
+      <ul class="agitate-{{ section.id }}__list">
+        {%- for block in section.blocks -%}
+          <li class="agitate-{{ section.id }}__item" {{ block.shopify_attributes }}>
+            <span class="agitate-{{ section.id }}__disc">{{ block.settings.disciplined }}</span>
+            <span class="agitate-{{ section.id }}__then">{{ block.settings.then }}</span>
+          </li>
+        {%- endfor -%}
+      </ul>
+    {%- endif -%}
+
+    {%- if s.turn != blank -%}
+      <p class="agitate-{{ section.id }}__turn">{{ s.turn }}</p>
+    {%- endif -%}
+  </div>
+</section>
+
+{%- style -%}
+  .agitate-{{ section.id }} {
+    background: var(--ascend-bg-2, #101319);
+    color: var(--ascend-body, #C4CAD3);
+    padding-block: var(--ascend-pad-block, 5rem);
+    border-bottom: 1px solid var(--ascend-line, rgba(255,255,255,0.09));
+  }
+  .agitate-{{ section.id }}__h {
+    font-family: var(--ascend-sans);
+    color: var(--ascend-ink, #EDF0F3);
+    font-size: clamp(1.6rem, 4.6vw, 2.5rem);
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin: 0 0 1.4rem;
+    max-width: 24ch;
+    text-wrap: balance;
+  }
+  .agitate-{{ section.id }}__intro { font-size: 1.08rem; line-height: 1.65; }
+  .agitate-{{ section.id }}__intro p { margin: 0 0 1rem; max-width: 54ch; }
+  .agitate-{{ section.id }}__list {
+    list-style: none;
+    margin: 2.2rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 1px;
+    background: var(--ascend-line, rgba(255,255,255,0.09));
+    border: 1px solid var(--ascend-line, rgba(255,255,255,0.09));
+    border-radius: var(--ascend-radius, 12px);
+    overflow: hidden;
+  }
+  .agitate-{{ section.id }}__item {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+    padding: 1.15rem 1.25rem;
+    background: var(--ascend-surface, #161A20);
+  }
+  .agitate-{{ section.id }}__disc {
+    font-weight: 600;
+    color: var(--ascend-ink, #EDF0F3);
+    font-size: 1rem;
+  }
+  .agitate-{{ section.id }}__then {
+    color: var(--ascend-muted, #8C94A0);
+    font-size: 0.98rem;
+    line-height: 1.5;
+  }
+  .agitate-{{ section.id }}__turn {
+    margin: 2.2rem 0 0;
+    font-family: var(--ascend-serif, Georgia, serif);
+    font-size: clamp(1.25rem, 3.4vw, 1.7rem);
+    line-height: 1.4;
+    color: var(--ascend-ink, #EDF0F3);
+    max-width: 30ch;
+    text-wrap: balance;
+  }
+  @media (min-width: 620px) {
+    .agitate-{{ section.id }}__item {
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: 1.5rem;
+      align-items: baseline;
+    }
+  }
+{%- endstyle -%}
+
+{% schema %}
+{
+  "name": "02 Agitate",
+  "tag": "section",
+  "class": "ascend-shell",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "Eyebrow", "default": "The part that doesn't add up" },
+    {
+      "type": "richtext",
+      "id": "heading",
+      "label": "Heading",
+      "default": "<p>You're disciplined about everything else. Then the chart opens.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "intro",
+      "label": "Intro",
+      "default": "<p>You hit the gym on days you don't feel like it. You ship code that passes review. You track macros, or your spend, or your reps — you are not a person with no self-control. So why does the account not reflect that?</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "turn",
+      "label": "Turn line",
+      "default": "<p>It isn't that you lack discipline. It's that trading is the one place you're running it without a spec.</p>"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "contrast",
+      "name": "Disciplined → then",
+      "settings": [
+        { "type": "text", "id": "disciplined", "label": "Where you're disciplined", "default": "You'd never push code without tests." },
+        { "type": "text", "id": "then", "label": "…then", "default": "But you'll click in on a setup you can't name." }
+      ]
+    }
+  ],
+  "max_blocks": 6,
+  "presets": [
+    {
+      "name": "02 Agitate",
+      "blocks": [
+        { "type": "contrast", "settings": { "disciplined": "You'd never push code without tests.", "then": "But you'll click in on a setup you can't name." } },
+        { "type": "contrast", "settings": { "disciplined": "You size positions to the pound on paper.", "then": "Then double down to 'make it back' before lunch." } },
+        { "type": "contrast", "settings": { "disciplined": "You wait for the data at work.", "then": "You front-run your own plan on a feeling." } }
+      ]
+    }
+  ]
+}
+{% endschema %}

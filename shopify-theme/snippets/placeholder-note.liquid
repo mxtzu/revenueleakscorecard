@@ -1,0 +1,21 @@
+{%- comment -%}
+  Editor-only banner that flags content which MUST be replaced with true,
+  verifiable material before the page runs live traffic.
+
+  It renders ONLY inside the Shopify theme editor (request.design_mode),
+  so live visitors never see it. Use it to guard: founder story, the
+  worked-trade example, testimonials, and the "most traders lose" stat source.
+
+  Accepts:
+  - message {String} What must be replaced and why (required)
+
+  Usage:
+  {% render 'placeholder-note', message: 'Replace with a TRUE, attributed customer quote. Fabricated reviews are illegal under the UK DMCC Act 2024.' %}
+{%- endcomment -%}
+
+{%- if request.design_mode -%}
+  <div class="ascend-editor-note" role="note">
+    <strong class="ascend-editor-note__tag">PLACEHOLDER — replace before launch</strong>
+    <span class="ascend-editor-note__body">{{ message | escape }}</span>
+  </div>
+{%- endif -%}

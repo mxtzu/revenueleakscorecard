@@ -1,0 +1,162 @@
+{%- comment -%}
+  10 — PRICE / CTA
+  Value reframe, NOT a profit promise: "£35. Less than one more trade you
+  shouldn't have taken." Primary CTA. Link to the product or a chosen URL.
+
+  Compliance: no income claim, no results guarantee. Price framing only.
+{%- endcomment -%}
+
+{%- assign s = section.settings -%}
+{%- liquid
+  assign cta_url = s.cta_url
+  if s.product != blank
+    assign cta_url = s.product.url
+  endif
+  if cta_url == blank
+    assign cta_url = '#'
+  endif
+-%}
+<section class="ascend-section price-{{ section.id }}" aria-labelledby="price-{{ section.id }}-h">
+  <div class="ascend-wrap">
+    <div class="price-{{ section.id }}__card">
+      {%- if s.eyebrow != blank -%}
+        <p class="ascend-eyebrow price-{{ section.id }}__eyebrow">{{ s.eyebrow | escape }}</p>
+      {%- endif -%}
+      <h2 id="price-{{ section.id }}-h" class="price-{{ section.id }}__h">{{ s.heading }}</h2>
+
+      <div class="price-{{ section.id }}__amount">
+        <span class="price-{{ section.id }}__price">{{ s.price_display | default: '£35' | escape }}</span>
+        {%- if s.price_note != blank -%}
+          <span class="price-{{ section.id }}__note">{{ s.price_note | escape }}</span>
+        {%- endif -%}
+      </div>
+
+      {%- if s.reframe != blank -%}
+        <p class="price-{{ section.id }}__reframe">{{ s.reframe }}</p>
+      {%- endif -%}
+
+      {%- if section.blocks.size > 0 -%}
+        <ul class="price-{{ section.id }}__includes">
+          {%- for block in section.blocks -%}
+            <li class="price-{{ section.id }}__inc" {{ block.shopify_attributes }}>
+              <span class="price-{{ section.id }}__tick" aria-hidden="true">✓</span>
+              {{ block.settings.item | escape }}
+            </li>
+          {%- endfor -%}
+        </ul>
+      {%- endif -%}
+
+      <div class="price-{{ section.id }}__cta">
+        {% render 'cta-button',
+          label: s.cta_label,
+          url: cta_url,
+          style: 'primary',
+          full_width: true,
+          subtext: s.cta_subtext,
+          id: 'ascend-primary-cta'
+        %}
+      </div>
+
+      {%- if s.reassurance != blank -%}
+        <p class="price-{{ section.id }}__reassure">{{ s.reassurance }}</p>
+      {%- endif -%}
+    </div>
+  </div>
+</section>
+
+{%- style -%}
+  .price-{{ section.id }} {
+    background: var(--ascend-bg, #0B0D10);
+    color: var(--ascend-body, #C4CAD3);
+    padding-block: calc(var(--ascend-pad-block, 5rem) + 1rem);
+    border-bottom: 1px solid var(--ascend-line, rgba(255,255,255,0.09));
+  }
+  .price-{{ section.id }}__card {
+    max-width: 560px; margin-inline: auto;
+    padding: clamp(1.75rem, 5vw, 2.75rem);
+    background: var(--ascend-surface, #161A20);
+    border: 1px solid var(--ascend-line, rgba(255,255,255,0.12));
+    border-radius: calc(var(--ascend-radius, 12px) + 6px);
+    box-shadow: var(--ascend-shadow, 0 24px 60px -30px rgba(0,0,0,0.7));
+    text-align: center;
+  }
+  .price-{{ section.id }}__eyebrow { color: var(--ascend-accent, #34B98C); }
+  .price-{{ section.id }}__h {
+    font-family: var(--ascend-sans);
+    color: var(--ascend-ink, #EDF0F3);
+    font-size: clamp(1.5rem, 4.4vw, 2.1rem);
+    line-height: 1.2; letter-spacing: -0.015em;
+    margin: 0 0 1.4rem; text-wrap: balance;
+  }
+  .price-{{ section.id }}__amount { display: flex; align-items: baseline; justify-content: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+  .price-{{ section.id }}__price { font-size: clamp(2.4rem, 8vw, 3.2rem); font-weight: 700; color: var(--ascend-ink, #EDF0F3); line-height: 1; }
+  .price-{{ section.id }}__note { font-size: 0.95rem; color: var(--ascend-muted, #8C94A0); }
+  .price-{{ section.id }}__reframe {
+    font-family: var(--ascend-serif, Georgia, serif);
+    font-size: clamp(1.15rem, 3.2vw, 1.5rem);
+    line-height: 1.4; color: var(--ascend-body, #C4CAD3);
+    margin: 0 auto 1.6rem; max-width: 26ch;
+  }
+  .price-{{ section.id }}__includes { list-style: none; margin: 0 0 1.8rem; padding: 0; display: inline-grid; gap: 0.55rem; text-align: left; }
+  .price-{{ section.id }}__inc { display: grid; grid-template-columns: auto 1fr; gap: 0.6rem; align-items: start; color: var(--ascend-body, #C4CAD3); line-height: 1.45; }
+  .price-{{ section.id }}__tick { color: var(--ascend-accent, #34B98C); font-weight: 700; }
+  .price-{{ section.id }}__cta { margin-bottom: 1.1rem; }
+  .price-{{ section.id }}__reassure { margin: 0; font-size: 0.88rem; color: var(--ascend-muted, #8C94A0); line-height: 1.5; }
+  .price-{{ section.id }}__reassure p { margin: 0; }
+{%- endstyle -%}
+
+{% schema %}
+{
+  "name": "10 Price — CTA",
+  "tag": "section",
+  "class": "ascend-shell",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "Eyebrow", "default": "One price. No subscription." },
+    {
+      "type": "richtext",
+      "id": "heading",
+      "label": "Heading",
+      "default": "<p>The Trading Playbook</p>"
+    },
+    { "type": "text", "id": "price_display", "label": "Price display", "default": "£35" },
+    { "type": "text", "id": "price_note", "label": "Price note", "default": "one-time · yours to keep" },
+    {
+      "type": "richtext",
+      "id": "reframe",
+      "label": "Value reframe (no profit promise)",
+      "default": "<p>Less than one more trade you shouldn't have taken.</p>"
+    },
+    { "type": "header", "content": "Call to action" },
+    { "type": "product", "id": "product", "label": "Product (CTA links to this)" },
+    { "type": "url", "id": "cta_url", "label": "…or a custom CTA URL (used if no product)" },
+    { "type": "text", "id": "cta_label", "label": "CTA label", "default": "Get the Playbook" },
+    { "type": "text", "id": "cta_subtext", "label": "CTA subtext", "default": "Instant digital download" },
+    {
+      "type": "richtext",
+      "id": "reassurance",
+      "label": "Reassurance (process, not profit)",
+      "default": "<p>Educational content, not financial advice. This is a process, not a promise — trading carries real risk of loss. Read the risk warning below before you buy.</p>"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "include",
+      "name": "Included item",
+      "settings": [
+        { "type": "text", "id": "item", "label": "Item", "default": "The Full Written Playbook (7-part system)" }
+      ]
+    }
+  ],
+  "max_blocks": 6,
+  "presets": [
+    {
+      "name": "10 Price — CTA",
+      "blocks": [
+        { "type": "include", "settings": { "item": "The Full Written Playbook (7-part system)" } },
+        { "type": "include", "settings": { "item": "The 8-Point Pre-Trade Checklist" } },
+        { "type": "include", "settings": { "item": "The Backtesting Method (verify it on your own data)" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

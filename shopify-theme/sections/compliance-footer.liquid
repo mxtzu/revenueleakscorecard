@@ -1,0 +1,143 @@
+{%- comment -%}
+  11 — COMPLIANCE FOOTER
+  Real compliance copy: educational-not-advice line + a clear risk warning
+  that futures carry significant risk of loss and most retail traders lose money.
+
+  NOTE TO OPERATOR: This footer is a baseline. It does NOT fully immunise the
+  page under FCA rules on financial promotions. Before running ANY paid traffic
+  to this page, have a financial-promotions solicitor review the entire page
+  (not just this footer). The "most retail traders lose" figure must be tied to
+  a real, cited regulator/source (see the stat_source setting) — never presented
+  as an implied promise that you'll be the exception.
+{%- endcomment -%}
+
+{%- assign s = section.settings -%}
+<footer class="ascend-section compliance-{{ section.id }}" aria-labelledby="compliance-{{ section.id }}-h" role="contentinfo">
+  <div class="ascend-wrap ascend-wrap--wide">
+    <h2 id="compliance-{{ section.id }}-h" class="compliance-{{ section.id }}__h">{{ s.heading | default: 'Before you go further' | escape }}</h2>
+
+    <div class="compliance-{{ section.id }}__grid">
+      <div class="compliance-{{ section.id }}__block">
+        <p class="compliance-{{ section.id }}__label">{{ s.edu_label | default: 'Educational content' | escape }}</p>
+        <div class="compliance-{{ section.id }}__body">{{ s.edu_body }}</div>
+      </div>
+
+      <div class="compliance-{{ section.id }}__block compliance-{{ section.id }}__block--risk">
+        <p class="compliance-{{ section.id }}__label">{{ s.risk_label | default: 'Risk warning' | escape }}</p>
+        <div class="compliance-{{ section.id }}__body">{{ s.risk_body }}</div>
+        {% render 'placeholder-note', message: 'STAT SOURCE — if you state a "most retail traders lose money" figure, it MUST cite a real regulator/source (e.g. a national securities regulator study or your broker disclosure) and link to it. Frame it as market reality, never as an implied promise you will be the exception. Fill the "Stat + source" setting below or remove the claim.' %}
+        {%- if s.stat_source != blank -%}
+          <p class="compliance-{{ section.id }}__source">{{ s.stat_source }}</p>
+        {%- endif -%}
+      </div>
+    </div>
+
+    {%- if section.blocks.size > 0 -%}
+      <nav class="compliance-{{ section.id }}__links" aria-label="{{ s.links_label | default: 'Footer links' | escape }}">
+        {%- for block in section.blocks -%}
+          <a class="compliance-{{ section.id }}__link" href="{{ block.settings.url | default: '#' }}" {{ block.shopify_attributes }}>{{ block.settings.label | escape }}</a>
+        {%- endfor -%}
+      </nav>
+    {%- endif -%}
+
+    <p class="compliance-{{ section.id }}__legal">
+      {{ s.legal_line | default: '© Ascend. Educational content only. Not financial, investment, or trading advice.' | escape }}
+    </p>
+  </div>
+</footer>
+
+{%- style -%}
+  .compliance-{{ section.id }} {
+    background: #06080A;
+    color: var(--ascend-muted, #8C94A0);
+    padding-block: var(--ascend-pad-block, 5rem);
+  }
+  .compliance-{{ section.id }}__h {
+    font-family: var(--ascend-sans);
+    color: var(--ascend-ink, #EDF0F3);
+    font-size: clamp(1.3rem, 3.4vw, 1.7rem);
+    margin: 0 0 1.8rem;
+  }
+  .compliance-{{ section.id }}__grid { display: grid; gap: 1.25rem; }
+  .compliance-{{ section.id }}__block {
+    padding: 1.4rem 1.5rem;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--ascend-line, rgba(255,255,255,0.09));
+    border-radius: var(--ascend-radius, 12px);
+  }
+  .compliance-{{ section.id }}__block--risk { border-color: color-mix(in srgb, var(--ascend-loss, #C85248) 40%, transparent); }
+  .compliance-{{ section.id }}__label {
+    margin: 0 0 0.7rem;
+    font-size: 0.74rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700;
+    color: var(--ascend-body, #C4CAD3);
+  }
+  .compliance-{{ section.id }}__block--risk .compliance-{{ section.id }}__label { color: var(--ascend-loss, #C85248); }
+  .compliance-{{ section.id }}__body { font-size: 0.95rem; line-height: 1.62; color: var(--ascend-muted, #8C94A0); }
+  .compliance-{{ section.id }}__body p { margin: 0 0 0.8rem; }
+  .compliance-{{ section.id }}__body p:last-child { margin-bottom: 0; }
+  .compliance-{{ section.id }}__source { margin: 0.9rem 0 0; font-size: 0.85rem; color: var(--ascend-muted, #8C94A0); font-style: italic; }
+  .compliance-{{ section.id }}__source a { color: var(--ascend-body, #C4CAD3); }
+  .compliance-{{ section.id }}__links { margin: 2rem 0 0; display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; }
+  .compliance-{{ section.id }}__link { color: var(--ascend-body, #C4CAD3); text-decoration: none; font-size: 0.9rem; }
+  .compliance-{{ section.id }}__link:hover { text-decoration: underline; }
+  .compliance-{{ section.id }}__link:focus-visible { outline: 3px solid var(--ascend-focus, #6FB0FF); outline-offset: 3px; border-radius: 3px; }
+  .compliance-{{ section.id }}__legal { margin: 2rem 0 0; font-size: 0.82rem; line-height: 1.5; color: var(--ascend-muted, #8C94A0); opacity: 0.85; }
+  @media (min-width: 720px) {
+    .compliance-{{ section.id }}__grid { grid-template-columns: 1fr 1fr; }
+  }
+{%- endstyle -%}
+
+{% schema %}
+{
+  "name": "11 Compliance Footer",
+  "tag": "section",
+  "class": "ascend-shell",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "Heading", "default": "Before you go further" },
+    { "type": "text", "id": "edu_label", "label": "Education label", "default": "Educational content, not financial advice" },
+    {
+      "type": "richtext",
+      "id": "edu_body",
+      "label": "Education body",
+      "default": "<p>The Trading Playbook is educational material about a rules-based decision process. It is not financial, investment, or trading advice, and nothing here is a recommendation to buy, sell, or hold any instrument. It does not account for your personal circumstances. Do your own research and, if you need advice, speak to a suitably authorised professional.</p>"
+    },
+    { "type": "text", "id": "risk_label", "label": "Risk label", "default": "Risk warning" },
+    {
+      "type": "richtext",
+      "id": "risk_body",
+      "label": "Risk body",
+      "default": "<p>Trading futures carries a significant risk of loss and is not suitable for everyone. You can lose more than your initial deposit. The large majority of retail traders lose money. Past performance and backtested results do not guarantee future outcomes. This product makes no income claim and no guarantee of results — it teaches a process for filtering trades, nothing more. Never trade with money you cannot afford to lose.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "stat_source",
+      "label": "Stat + source (cite a real regulator/source)",
+      "default": "<p>[PLACEHOLDER — cite a real source for any 'most traders lose' figure, e.g. a named securities regulator study or your broker's own risk disclosure, and link to it.]</p>"
+    },
+    { "type": "text", "id": "links_label", "label": "Links aria-label", "default": "Footer links" },
+    { "type": "text", "id": "legal_line", "label": "Legal line", "default": "© Ascend. Educational content only. Not financial, investment, or trading advice." }
+  ],
+  "blocks": [
+    {
+      "type": "link",
+      "name": "Footer link",
+      "settings": [
+        { "type": "text", "id": "label", "label": "Label", "default": "Terms" },
+        { "type": "url", "id": "url", "label": "URL" }
+      ]
+    }
+  ],
+  "max_blocks": 8,
+  "presets": [
+    {
+      "name": "11 Compliance Footer",
+      "blocks": [
+        { "type": "link", "settings": { "label": "Terms of service" } },
+        { "type": "link", "settings": { "label": "Refund policy" } },
+        { "type": "link", "settings": { "label": "Privacy policy" } },
+        { "type": "link", "settings": { "label": "Contact" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

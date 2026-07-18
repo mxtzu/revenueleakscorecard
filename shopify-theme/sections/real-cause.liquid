@@ -1,0 +1,122 @@
+{%- comment -%}
+  03 — REAL CAUSE
+  Reframe: willpower (a moral failing) -> a missing rule (a structural gap).
+  Belief installed: "You don't have a willpower problem. You have a missing filter."
+{%- endcomment -%}
+
+{%- assign s = section.settings -%}
+<section class="ascend-section cause-{{ section.id }}" aria-labelledby="cause-{{ section.id }}-h">
+  <div class="ascend-wrap">
+    {%- if s.eyebrow != blank -%}
+      <p class="ascend-eyebrow">{{ s.eyebrow | escape }}</p>
+    {%- endif -%}
+
+    <h2 id="cause-{{ section.id }}-h" class="cause-{{ section.id }}__h">{{ s.heading }}</h2>
+
+    <div class="cause-{{ section.id }}__grid">
+      <div class="cause-{{ section.id }}__col cause-{{ section.id }}__col--old">
+        <p class="cause-{{ section.id }}__label">{{ s.old_label | default: 'The story you were sold' | escape }}</p>
+        <div class="cause-{{ section.id }}__body">{{ s.old_body }}</div>
+      </div>
+      <div class="cause-{{ section.id }}__col cause-{{ section.id }}__col--new">
+        <p class="cause-{{ section.id }}__label">{{ s.new_label | default: 'What is actually true' | escape }}</p>
+        <div class="cause-{{ section.id }}__body">{{ s.new_body }}</div>
+      </div>
+    </div>
+
+    {%- if s.payoff != blank -%}
+      <p class="cause-{{ section.id }}__payoff">{{ s.payoff }}</p>
+    {%- endif -%}
+  </div>
+</section>
+
+{%- style -%}
+  .cause-{{ section.id }} {
+    background: var(--ascend-bg, #0B0D10);
+    color: var(--ascend-body, #C4CAD3);
+    padding-block: var(--ascend-pad-block, 5rem);
+    border-bottom: 1px solid var(--ascend-line, rgba(255,255,255,0.09));
+  }
+  .cause-{{ section.id }}__h {
+    font-family: var(--ascend-sans);
+    color: var(--ascend-ink, #EDF0F3);
+    font-size: clamp(1.7rem, 5vw, 2.7rem);
+    line-height: 1.16;
+    letter-spacing: -0.015em;
+    margin: 0 0 2rem;
+    max-width: 20ch;
+    text-wrap: balance;
+  }
+  .cause-{{ section.id }}__grid { display: grid; gap: 1rem; }
+  .cause-{{ section.id }}__col {
+    padding: 1.4rem 1.4rem 1.5rem;
+    border: 1px solid var(--ascend-line, rgba(255,255,255,0.09));
+    border-radius: var(--ascend-radius, 12px);
+    background: var(--ascend-surface, #161A20);
+  }
+  .cause-{{ section.id }}__col--old { opacity: 0.82; }
+  .cause-{{ section.id }}__col--new { border-color: color-mix(in srgb, var(--ascend-accent, #34B98C) 45%, transparent); }
+  .cause-{{ section.id }}__label {
+    font-size: 0.76rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin: 0 0 0.75rem;
+    color: var(--ascend-muted, #8C94A0);
+  }
+  .cause-{{ section.id }}__col--new .cause-{{ section.id }}__label { color: var(--ascend-accent, #34B98C); }
+  .cause-{{ section.id }}__body { font-size: 1.04rem; line-height: 1.6; }
+  .cause-{{ section.id }}__body p { margin: 0 0 0.85rem; }
+  .cause-{{ section.id }}__body p:last-child { margin-bottom: 0; }
+  .cause-{{ section.id }}__col--old .cause-{{ section.id }}__body { color: var(--ascend-muted, #8C94A0); }
+  .cause-{{ section.id }}__payoff {
+    margin: 2.2rem 0 0;
+    font-family: var(--ascend-serif, Georgia, serif);
+    font-size: clamp(1.3rem, 3.6vw, 1.85rem);
+    line-height: 1.35;
+    color: var(--ascend-ink, #EDF0F3);
+    max-width: 26ch;
+    text-wrap: balance;
+  }
+  .cause-{{ section.id }}__payoff strong { color: var(--ascend-accent, #34B98C); font-weight: 650; }
+  @media (min-width: 700px) {
+    .cause-{{ section.id }}__grid { grid-template-columns: 1fr 1fr; align-items: start; }
+  }
+{%- endstyle -%}
+
+{% schema %}
+{
+  "name": "03 Real Cause",
+  "tag": "section",
+  "class": "ascend-shell",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "Eyebrow", "default": "Name it correctly" },
+    {
+      "type": "richtext",
+      "id": "heading",
+      "label": "Heading",
+      "default": "<p>You don't have a willpower problem. You have a missing filter.</p>"
+    },
+    { "type": "text", "id": "old_label", "label": "Left column label", "default": "The story you were sold" },
+    {
+      "type": "richtext",
+      "id": "old_body",
+      "label": "Left column body",
+      "default": "<p>Be more disciplined. Want it more. Journal your feelings. Meditate before the open.</p><p>So every red day becomes a referendum on your character — and 'try harder' is a plan that fails at the exact moment you need it.</p>"
+    },
+    { "type": "text", "id": "new_label", "label": "Right column label", "default": "What's actually true" },
+    {
+      "type": "richtext",
+      "id": "new_body",
+      "label": "Right column body",
+      "default": "<p>Willpower is a battery. It's flat by the third re-test of a level. You can't summon it on command — nobody can.</p><p>What you're missing isn't grit. It's a pre-committed rule that answers 'is this a trade?' before you're emotionally in the position to lie to yourself.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "payoff",
+      "label": "Payoff line",
+      "default": "<p>A rule doesn't get tired. <strong>Build the 'no' once, and it holds every session after.</strong></p>"
+    }
+  ],
+  "presets": [{ "name": "03 Real Cause" }]
+}
+{% endschema %}

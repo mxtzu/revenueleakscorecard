@@ -1,0 +1,170 @@
+{%- comment -%}
+  06 — WHAT YOU GET (product stack)
+  Full Written Playbook (7-part system), 8-Point Pre-Trade Checklist,
+  Backtesting Method. Order-bump mention: Trade Journal (~£15).
+  Plain and specific — no hype, no bonus-stacking theatre.
+{%- endcomment -%}
+
+{%- assign s = section.settings -%}
+<section class="ascend-section wyg-{{ section.id }}" aria-labelledby="wyg-{{ section.id }}-h">
+  <div class="ascend-wrap ascend-wrap--wide">
+    {%- if s.eyebrow != blank -%}
+      <p class="ascend-eyebrow wyg-{{ section.id }}__eyebrow">{{ s.eyebrow | escape }}</p>
+    {%- endif -%}
+    <h2 id="wyg-{{ section.id }}-h" class="wyg-{{ section.id }}__h">{{ s.heading }}</h2>
+    {%- if s.intro != blank -%}<div class="wyg-{{ section.id }}__intro">{{ s.intro }}</div>{%- endif -%}
+
+    {%- if section.blocks.size > 0 -%}
+      <ul class="wyg-{{ section.id }}__grid">
+        {%- for block in section.blocks -%}
+          <li class="wyg-{{ section.id }}__card" {{ block.shopify_attributes }}>
+            {%- if block.settings.tag != blank -%}
+              <span class="wyg-{{ section.id }}__cardtag">{{ block.settings.tag | escape }}</span>
+            {%- endif -%}
+            <h3 class="wyg-{{ section.id }}__cardh">{{ block.settings.title | escape }}</h3>
+            <p class="wyg-{{ section.id }}__cardt">{{ block.settings.text }}</p>
+          </li>
+        {%- endfor -%}
+      </ul>
+    {%- endif -%}
+
+    {%- if s.bump_title != blank -%}
+      <aside class="wyg-{{ section.id }}__bump" aria-label="{{ s.bump_title | escape }}">
+        <div class="wyg-{{ section.id }}__bumpmark" aria-hidden="true">+</div>
+        <div class="wyg-{{ section.id }}__bumpbody">
+          <p class="wyg-{{ section.id }}__bumptag">{{ s.bump_label | default: 'Optional add-on at checkout' | escape }}</p>
+          <h3 class="wyg-{{ section.id }}__bumph">{{ s.bump_title | escape }}</h3>
+          <div class="wyg-{{ section.id }}__bumptext">{{ s.bump_text }}</div>
+        </div>
+      </aside>
+    {%- endif -%}
+
+    {%- if s.format_note != blank -%}
+      <p class="wyg-{{ section.id }}__format">{{ s.format_note }}</p>
+    {%- endif -%}
+  </div>
+</section>
+
+{%- style -%}
+  .wyg-{{ section.id }} {
+    background: var(--ascend-surface-light-2, #E9EDF1);
+    color: var(--ascend-body-dark, #3A434E);
+    padding-block: var(--ascend-pad-block, 5rem);
+    border-bottom: 1px solid var(--ascend-line-dark, rgba(17,24,32,0.12));
+  }
+  .wyg-{{ section.id }}__eyebrow { color: var(--ascend-accent, #34B98C); }
+  .wyg-{{ section.id }}__h {
+    font-family: var(--ascend-sans);
+    color: var(--ascend-ink-dark, #111820);
+    font-size: clamp(1.7rem, 4.6vw, 2.6rem);
+    line-height: 1.14;
+    letter-spacing: -0.02em;
+    margin: 0 0 1rem;
+    max-width: 22ch;
+    text-wrap: balance;
+  }
+  .wyg-{{ section.id }}__intro { font-size: 1.08rem; line-height: 1.6; max-width: 52ch; }
+  .wyg-{{ section.id }}__intro p { margin: 0; }
+  .wyg-{{ section.id }}__grid {
+    list-style: none; margin: 2.4rem 0 0; padding: 0;
+    display: grid; gap: 1rem;
+  }
+  .wyg-{{ section.id }}__card {
+    padding: 1.5rem 1.5rem 1.6rem;
+    background: #fff;
+    border: 1px solid var(--ascend-line-dark, rgba(17,24,32,0.12));
+    border-radius: var(--ascend-radius, 12px);
+  }
+  .wyg-{{ section.id }}__cardtag {
+    display: inline-block; margin-bottom: 0.7rem;
+    font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700;
+    color: var(--ascend-accent, #34B98C);
+  }
+  .wyg-{{ section.id }}__cardh { margin: 0 0 0.5rem; font-size: 1.15rem; color: var(--ascend-ink-dark, #111820); }
+  .wyg-{{ section.id }}__cardt { margin: 0; line-height: 1.55; color: var(--ascend-body-dark, #3A434E); }
+  .wyg-{{ section.id }}__cardt p { margin: 0; }
+
+  .wyg-{{ section.id }}__bump {
+    margin: 1.5rem 0 0;
+    display: grid; grid-template-columns: auto 1fr; gap: 1rem;
+    padding: 1.3rem 1.4rem;
+    background: #fff;
+    border: 1px dashed color-mix(in srgb, var(--ascend-accent, #34B98C) 55%, transparent);
+    border-radius: var(--ascend-radius, 12px);
+  }
+  .wyg-{{ section.id }}__bumpmark {
+    width: 2.2rem; height: 2.2rem; flex: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 8px; font-size: 1.4rem; font-weight: 700;
+    background: color-mix(in srgb, var(--ascend-accent, #34B98C) 16%, #fff);
+    color: color-mix(in srgb, var(--ascend-accent, #34B98C) 78%, #08120E);
+  }
+  .wyg-{{ section.id }}__bumptag { margin: 0 0 0.25rem; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ascend-muted, #8C94A0); font-weight: 700; }
+  .wyg-{{ section.id }}__bumph { margin: 0 0 0.4rem; font-size: 1.05rem; color: var(--ascend-ink-dark, #111820); }
+  .wyg-{{ section.id }}__bumptext { margin: 0; line-height: 1.5; color: var(--ascend-body-dark, #3A434E); }
+  .wyg-{{ section.id }}__bumptext p { margin: 0; }
+  .wyg-{{ section.id }}__format { margin: 1.8rem 0 0; font-size: 0.9rem; color: var(--ascend-muted, #8C94A0); line-height: 1.55; max-width: 56ch; }
+  .wyg-{{ section.id }}__format p { margin: 0; }
+  @media (min-width: 720px) {
+    .wyg-{{ section.id }}__grid { grid-template-columns: repeat(3, 1fr); }
+  }
+{%- endstyle -%}
+
+{% schema %}
+{
+  "name": "06 What You Get",
+  "tag": "section",
+  "class": "ascend-shell",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "Eyebrow", "default": "What's in the kit" },
+    {
+      "type": "richtext",
+      "id": "heading",
+      "label": "Heading",
+      "default": "<p>The Trading Playbook. Three parts, one job: build the 'no'.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "intro",
+      "label": "Intro",
+      "default": "<p>It's a written strategy kit, not a course, a Discord, or a signal group. You read it once, you internalise the gate, and you own it. Nothing to renew.</p>"
+    },
+    { "type": "text", "id": "bump_label", "label": "Order-bump label", "default": "Optional add-on at checkout" },
+    { "type": "text", "id": "bump_title", "label": "Order-bump title", "default": "The Trade Journal — about £15" },
+    {
+      "type": "richtext",
+      "id": "bump_text",
+      "label": "Order-bump text",
+      "default": "<p>A structured logging template built around the 8-point gate, so every trade gets scored against the filter. Offered at checkout — skip it and the Playbook still stands on its own.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "format_note",
+      "label": "Format note",
+      "default": "<p>Delivered as a digital download you keep. Written for ES &amp; NASDAQ intraday. No upsell funnel, no 'inner circle', no monthly fee.</p>"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "item",
+      "name": "Stack item",
+      "settings": [
+        { "type": "text", "id": "tag", "label": "Tag", "default": "Core" },
+        { "type": "text", "id": "title", "label": "Title", "default": "The Full Written Playbook" },
+        { "type": "richtext", "id": "text", "label": "Text", "default": "<p>The complete 7-part system, written out end to end.</p>" }
+      ]
+    }
+  ],
+  "max_blocks": 6,
+  "presets": [
+    {
+      "name": "06 What You Get",
+      "blocks": [
+        { "type": "item", "settings": { "tag": "Core", "title": "The Full Written Playbook", "text": "<p>The complete 7-part system — from reading liquidity to the exact conditions that make a trade valid. Written to be read once and used forever.</p>" } },
+        { "type": "item", "settings": { "tag": "Do this pre-trade", "title": "The 8-Point Pre-Trade Checklist", "text": "<p>The gate as a printable list you run before every click. If it doesn't clear, you don't trade. That's the discipline, externalised.</p>" } },
+        { "type": "item", "settings": { "tag": "Prove it yourself", "title": "The Backtesting Method", "text": "<p>A step-by-step way to test the filter on your own historical data — so you trust it because you checked, not because a stranger told you to.</p>" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

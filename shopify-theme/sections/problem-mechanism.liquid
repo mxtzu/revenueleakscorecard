@@ -1,0 +1,179 @@
+{%- comment -%}
+  04 — MECHANISM OF THE PROBLEM
+  Belief installed: "You're not getting hunted. You're volunteering."
+  Uses their language (stop-hunting, exit liquidity) tied to a REAL mechanism
+  — orders resting where stops cluster — not a conspiracy.
+{%- endcomment -%}
+
+{%- assign s = section.settings -%}
+<section class="ascend-section mech-{{ section.id }}" aria-labelledby="mech-{{ section.id }}-h">
+  <div class="ascend-wrap">
+    {%- if s.eyebrow != blank -%}
+      <p class="ascend-eyebrow">{{ s.eyebrow | escape }}</p>
+    {%- endif -%}
+
+    <h2 id="mech-{{ section.id }}-h" class="mech-{{ section.id }}__h">{{ s.heading }}</h2>
+
+    {%- if s.intro != blank -%}
+      <div class="mech-{{ section.id }}__intro">{{ s.intro }}</div>
+    {%- endif -%}
+
+    {%- if section.blocks.size > 0 -%}
+      <ol class="mech-{{ section.id }}__steps">
+        {%- for block in section.blocks -%}
+          <li class="mech-{{ section.id }}__step" {{ block.shopify_attributes }}>
+            <span class="mech-{{ section.id }}__num" aria-hidden="true">{{ forloop.index }}</span>
+            <div class="mech-{{ section.id }}__stepbody">
+              <h3 class="mech-{{ section.id }}__steph">{{ block.settings.title | escape }}</h3>
+              <p class="mech-{{ section.id }}__stept">{{ block.settings.text }}</p>
+            </div>
+          </li>
+        {%- endfor -%}
+      </ol>
+    {%- endif -%}
+
+    {%- if s.punch != blank -%}
+      <p class="mech-{{ section.id }}__punch">{{ s.punch }}</p>
+    {%- endif -%}
+
+    {%- if s.disclaimer != blank -%}
+      <p class="mech-{{ section.id }}__disc">{{ s.disclaimer }}</p>
+    {%- endif -%}
+  </div>
+</section>
+
+{%- style -%}
+  .mech-{{ section.id }} {
+    background: var(--ascend-bg-2, #101319);
+    color: var(--ascend-body, #C4CAD3);
+    padding-block: var(--ascend-pad-block, 5rem);
+    border-bottom: 1px solid var(--ascend-line, rgba(255,255,255,0.09));
+  }
+  .mech-{{ section.id }}__h {
+    font-family: var(--ascend-sans);
+    color: var(--ascend-ink, #EDF0F3);
+    font-size: clamp(1.7rem, 5vw, 2.7rem);
+    line-height: 1.16;
+    letter-spacing: -0.015em;
+    margin: 0 0 1.4rem;
+    max-width: 22ch;
+    text-wrap: balance;
+  }
+  .mech-{{ section.id }}__h em { font-style: normal; color: var(--ascend-loss, #C85248); }
+  .mech-{{ section.id }}__intro { font-size: 1.08rem; line-height: 1.65; max-width: 54ch; }
+  .mech-{{ section.id }}__intro p { margin: 0 0 1rem; }
+  .mech-{{ section.id }}__steps {
+    list-style: none;
+    counter-reset: none;
+    margin: 2.4rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 1rem;
+  }
+  .mech-{{ section.id }}__step {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 1rem;
+    align-items: start;
+    padding: 1.25rem 1.35rem;
+    background: var(--ascend-surface, #161A20);
+    border: 1px solid var(--ascend-line, rgba(255,255,255,0.09));
+    border-radius: var(--ascend-radius, 12px);
+  }
+  .mech-{{ section.id }}__num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    border: 1px solid var(--ascend-line, rgba(255,255,255,0.14));
+    color: var(--ascend-muted, #8C94A0);
+    font-size: 0.9rem;
+    font-weight: 600;
+    flex: none;
+  }
+  .mech-{{ section.id }}__steph {
+    margin: 0.15rem 0 0.35rem;
+    font-size: 1.05rem;
+    color: var(--ascend-ink, #EDF0F3);
+    font-weight: 600;
+  }
+  .mech-{{ section.id }}__stept { margin: 0; color: var(--ascend-body, #C4CAD3); line-height: 1.55; }
+  .mech-{{ section.id }}__punch {
+    margin: 2.4rem 0 0;
+    font-family: var(--ascend-serif, Georgia, serif);
+    font-size: clamp(1.35rem, 4vw, 2rem);
+    line-height: 1.3;
+    color: var(--ascend-ink, #EDF0F3);
+    max-width: 24ch;
+    text-wrap: balance;
+  }
+  .mech-{{ section.id }}__punch strong { color: var(--ascend-loss, #C85248); font-weight: 650; }
+  .mech-{{ section.id }}__disc {
+    margin: 1.5rem 0 0;
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: var(--ascend-muted, #8C94A0);
+    max-width: 56ch;
+    border-left: 2px solid var(--ascend-line, rgba(255,255,255,0.14));
+    padding-left: 1rem;
+  }
+{%- endstyle -%}
+
+{% schema %}
+{
+  "name": "04 Problem Mechanism",
+  "tag": "section",
+  "class": "ascend-shell",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "Eyebrow", "default": "Where the money actually goes" },
+    {
+      "type": "richtext",
+      "id": "heading",
+      "label": "Heading",
+      "default": "<p>You're not getting hunted. You're <em>volunteering</em>.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "intro",
+      "label": "Intro",
+      "default": "<p>Everyone's stops sit in the same obvious places — under the swing low, above the range high, on the round number. That's not paranoia; it's just where a rule-of-thumb tells everyone to put them. A cluster of resting stop orders is, mechanically, a pool of liquidity: a place where size can get filled at once.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "punch",
+      "label": "Punch line",
+      "default": "<p>An entry with no filter tends to land in exactly the same spot as everyone else's — <strong>right on the liquidity, just before it gets taken.</strong></p>"
+    },
+    {
+      "type": "richtext",
+      "id": "disclaimer",
+      "label": "Honest-framing note",
+      "default": "<p>No one is watching your specific stop. It's simpler and worse than that: price is drawn to where orders rest, and unfiltered entries keep putting you on the wrong side of that draw — over and over, by design of your own habit.</p>"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "step",
+      "name": "Mechanism step",
+      "settings": [
+        { "type": "text", "id": "title", "label": "Step title", "default": "Everyone's stop goes to the same place" },
+        { "type": "richtext", "id": "text", "label": "Step text", "default": "<p>Under the low, over the high. Predictable by construction.</p>" }
+      ]
+    }
+  ],
+  "max_blocks": 6,
+  "presets": [
+    {
+      "name": "04 Problem Mechanism",
+      "blocks": [
+        { "type": "step", "settings": { "title": "Stops cluster in the obvious spots", "text": "<p>Under the swing low, over the range high, on the round number — because that's what every guide taught.</p>" } },
+        { "type": "step", "settings": { "title": "A cluster of stops is a pool of liquidity", "text": "<p>Resting orders are fuel. To fill size, price has to trade into where those orders sit.</p>" } },
+        { "type": "step", "settings": { "title": "You enter without a filter", "text": "<p>You chase the move into the level — the same level everyone's stop is leaning on.</p>" } },
+        { "type": "step", "settings": { "title": "Price sweeps, then reverses", "text": "<p>The pool gets taken, your stop is part of it, and the real move happens without you.</p>" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

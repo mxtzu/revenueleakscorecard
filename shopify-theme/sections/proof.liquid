@@ -1,0 +1,191 @@
+{%- comment -%}
+  07 — PROOF (self-verification)
+  The proof isn't a screenshot of someone's gains. It's that YOU backtest the
+  filter on YOUR data before risking a penny. Includes ONE honest, annotated
+  worked-trade example as a clean, fully-editable block.
+
+  IMPORTANT: the worked example is a PLACEHOLDER. It must be replaced with a
+  real, honestly-annotated trade (including where the method would NOT have
+  taken the trade). No cherry-picked or fabricated results.
+{%- endcomment -%}
+
+{%- assign s = section.settings -%}
+<section class="ascend-section proof-{{ section.id }}" aria-labelledby="proof-{{ section.id }}-h">
+  <div class="ascend-wrap ascend-wrap--wide">
+    {%- if s.eyebrow != blank -%}
+      <p class="ascend-eyebrow proof-{{ section.id }}__eyebrow">{{ s.eyebrow | escape }}</p>
+    {%- endif -%}
+    <h2 id="proof-{{ section.id }}-h" class="proof-{{ section.id }}__h">{{ s.heading }}</h2>
+    {%- if s.intro != blank -%}<div class="proof-{{ section.id }}__intro">{{ s.intro }}</div>{%- endif -%}
+
+    <figure class="proof-{{ section.id }}__example">
+      {% render 'placeholder-note', message: 'WORKED-TRADE EXAMPLE — highest-leverage element on the page. Replace the image and every annotation with ONE real, honestly-annotated trade or backtest from real data. Show the entry, the invalidation, and ideally a case where the filter said NO. Do not cherry-pick or fabricate. Fabricated results are illegal under the UK DMCC Act 2024.' %}
+
+      <div class="proof-{{ section.id }}__media">
+        {%- if s.example_image != blank -%}
+          <img
+            src="{{ s.example_image | image_url: width: 1200 }}"
+            srcset="{{ s.example_image | image_url: width: 600 }} 600w, {{ s.example_image | image_url: width: 1200 }} 1200w"
+            sizes="(min-width: 1040px) 640px, 100vw"
+            width="{{ s.example_image.width }}"
+            height="{{ s.example_image.height }}"
+            alt="{{ s.example_alt | escape }}"
+            loading="lazy"
+            decoding="async"
+          >
+        {%- else -%}
+          <div class="proof-{{ section.id }}__placeholder" role="img" aria-label="{{ s.example_alt | default: 'Annotated chart placeholder' | escape }}">
+            <span>{{ s.placeholder_caption | default: 'Add your annotated chart here' | escape }}</span>
+          </div>
+        {%- endif -%}
+      </div>
+
+      <figcaption class="proof-{{ section.id }}__caption">
+        <p class="proof-{{ section.id }}__captionlead">{{ s.example_title | default: 'One worked example' | escape }}</p>
+        {%- if section.blocks.size > 0 -%}
+          <ol class="proof-{{ section.id }}__ann">
+            {%- for block in section.blocks -%}
+              <li class="proof-{{ section.id }}__annitem" {{ block.shopify_attributes }}>
+                <span class="proof-{{ section.id }}__annmark" aria-hidden="true">{{ forloop.index }}</span>
+                <span class="proof-{{ section.id }}__anntext">{{ block.settings.note | escape }}</span>
+              </li>
+            {%- endfor -%}
+          </ol>
+        {%- endif -%}
+        {%- if s.example_honesty != blank -%}
+          <p class="proof-{{ section.id }}__honesty">{{ s.example_honesty }}</p>
+        {%- endif -%}
+      </figcaption>
+    </figure>
+
+    {%- if s.close != blank -%}
+      <p class="proof-{{ section.id }}__close">{{ s.close }}</p>
+    {%- endif -%}
+  </div>
+</section>
+
+{%- style -%}
+  .proof-{{ section.id }} {
+    background: var(--ascend-surface-light, #F5F7F9);
+    color: var(--ascend-body-dark, #3A434E);
+    padding-block: var(--ascend-pad-block, 5rem);
+    border-bottom: 1px solid var(--ascend-line-dark, rgba(17,24,32,0.12));
+  }
+  .proof-{{ section.id }}__eyebrow { color: var(--ascend-accent, #34B98C); }
+  .proof-{{ section.id }}__h {
+    font-family: var(--ascend-sans);
+    color: var(--ascend-ink-dark, #111820);
+    font-size: clamp(1.7rem, 4.6vw, 2.6rem);
+    line-height: 1.14;
+    letter-spacing: -0.02em;
+    margin: 0 0 1rem;
+    max-width: 24ch;
+    text-wrap: balance;
+  }
+  .proof-{{ section.id }}__intro { font-size: 1.08rem; line-height: 1.6; max-width: 54ch; }
+  .proof-{{ section.id }}__intro p { margin: 0 0 1rem; }
+  .proof-{{ section.id }}__example {
+    margin: 2.4rem 0 0;
+    background: #fff;
+    border: 1px solid var(--ascend-line-dark, rgba(17,24,32,0.12));
+    border-radius: calc(var(--ascend-radius, 12px) + 4px);
+    overflow: hidden;
+    box-shadow: 0 20px 50px -34px rgba(17,24,32,0.4);
+  }
+  .proof-{{ section.id }}__example .ascend-editor-note { margin: 1rem; }
+  .proof-{{ section.id }}__media { width: 100%; background: #0B0D10; }
+  .proof-{{ section.id }}__media img { display: block; width: 100%; height: auto; }
+  .proof-{{ section.id }}__placeholder {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 260px; padding: 2rem;
+    background: repeating-linear-gradient(45deg, #10151b, #10151b 12px, #131a22 12px, #131a22 24px);
+    color: #7f8a97; font-size: 0.95rem; text-align: center;
+  }
+  .proof-{{ section.id }}__caption { padding: clamp(1.4rem, 4vw, 2rem); }
+  .proof-{{ section.id }}__captionlead { margin: 0 0 1rem; font-weight: 650; color: var(--ascend-ink-dark, #111820); font-size: 1.1rem; }
+  .proof-{{ section.id }}__ann { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.7rem; }
+  .proof-{{ section.id }}__annitem { display: grid; grid-template-columns: auto 1fr; gap: 0.8rem; align-items: start; }
+  .proof-{{ section.id }}__annmark {
+    width: 1.55rem; height: 1.55rem; flex: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--ascend-accent, #34B98C) 16%, #fff);
+    color: color-mix(in srgb, var(--ascend-accent, #34B98C) 78%, #08120E);
+    font-size: 0.8rem; font-weight: 700;
+  }
+  .proof-{{ section.id }}__anntext { color: var(--ascend-ink-dark, #111820); line-height: 1.5; }
+  .proof-{{ section.id }}__honesty {
+    margin: 1.4rem 0 0; padding-top: 1.2rem;
+    border-top: 1px solid var(--ascend-line-dark, rgba(17,24,32,0.12));
+    font-size: 0.95rem; line-height: 1.55; color: var(--ascend-body-dark, #3A434E);
+  }
+  .proof-{{ section.id }}__honesty p { margin: 0; }
+  .proof-{{ section.id }}__close {
+    margin: 2.4rem auto 0;
+    font-family: var(--ascend-serif, Georgia, serif);
+    font-size: clamp(1.25rem, 3.4vw, 1.7rem);
+    line-height: 1.4; color: var(--ascend-ink-dark, #111820);
+    max-width: 30ch; text-wrap: balance;
+  }
+{%- endstyle -%}
+
+{% schema %}
+{
+  "name": "07 Proof — Self-verify",
+  "tag": "section",
+  "class": "ascend-shell",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "Eyebrow", "default": "Don't take my word for any of this" },
+    {
+      "type": "richtext",
+      "id": "heading",
+      "label": "Heading",
+      "default": "<p>The only proof that should move you is proof you generated yourself.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "intro",
+      "label": "Intro",
+      "default": "<p>You've seen enough green P&amp;L screenshots to know they mean nothing. So the Playbook doesn't ask you to believe a testimonial. It hands you a backtesting method and tells you to run the filter against your own historical charts — before a single penny is at risk. If it doesn't hold up on your data, you'll know before you've risked anything.</p>"
+    },
+    { "type": "header", "content": "Worked example (MUST be replaced with a real trade)" },
+    { "type": "image_picker", "id": "example_image", "label": "Annotated chart image" },
+    { "type": "text", "id": "example_alt", "label": "Image alt text", "default": "Annotated ES chart: sweep, break of structure, and the filtered entry" },
+    { "type": "text", "id": "placeholder_caption", "label": "Empty-state caption", "default": "Add your annotated chart here" },
+    { "type": "text", "id": "example_title", "label": "Example title", "default": "One worked example — annotated honestly" },
+    {
+      "type": "richtext",
+      "id": "example_honesty",
+      "label": "Honesty note",
+      "default": "<p>Placeholder: replace with the real numbers, the real invalidation point, and — importantly — an example of a setup the filter told you to skip. Honesty is the entire selling point here.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "close",
+      "label": "Closing line",
+      "default": "<p>A method you verified yourself is a method you'll actually follow at 9:31am.</p>"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "annotation",
+      "name": "Annotation",
+      "settings": [
+        { "type": "text", "id": "note", "label": "Annotation", "default": "Placeholder: describe what happened at this point on the chart." }
+      ]
+    }
+  ],
+  "max_blocks": 8,
+  "presets": [
+    {
+      "name": "07 Proof — Self-verify",
+      "blocks": [
+        { "type": "annotation", "settings": { "note": "Placeholder — 1: the liquidity pool that gets swept (name the level and time)." } },
+        { "type": "annotation", "settings": { "note": "Placeholder — 2: the break of structure / inverse-FVG shift that confirmed." } },
+        { "type": "annotation", "settings": { "note": "Placeholder — 3: ES/NQ agreement (or the divergence that would have voided it)." } },
+        { "type": "annotation", "settings": { "note": "Placeholder — 4: the defined stop and where the idea was invalidated." } }
+      ]
+    }
+  ]
+}
+{% endschema %}

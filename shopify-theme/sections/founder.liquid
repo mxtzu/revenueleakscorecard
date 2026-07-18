@@ -1,0 +1,108 @@
+{%- comment -%}
+  08 — ANTI-GURU / FOUNDER
+  Reformed overtrader. No Lambo. Built a mechanical filter out of desperation
+  because discretion kept failing. Disarms "if it worked they'd trade it, not sell it."
+
+  IMPORTANT: The story below is PLACEHOLDER text. It MUST be replaced with true,
+  first-person events. Do not invent specifics — no fabricated account sizes,
+  timelines, or outcomes.
+{%- endcomment -%}
+
+{%- assign s = section.settings -%}
+<section class="ascend-section founder-{{ section.id }}" aria-labelledby="founder-{{ section.id }}-h">
+  <div class="ascend-wrap">
+    {%- if s.eyebrow != blank -%}
+      <p class="ascend-eyebrow founder-{{ section.id }}__eyebrow">{{ s.eyebrow | escape }}</p>
+    {%- endif -%}
+    <h2 id="founder-{{ section.id }}-h" class="founder-{{ section.id }}__h">{{ s.heading }}</h2>
+
+    {% render 'placeholder-note', message: 'FOUNDER STORY — must be TRUE first-person events. Replace every line below with real history: what actually happened, honestly. Do not invent account sizes, timelines, or outcomes. This is the section that disarms "if it worked they would trade it, not sell it" — it only works if it is genuine.' %}
+
+    <div class="founder-{{ section.id }}__body">{{ s.story }}</div>
+
+    {%- if s.disarm != blank -%}
+      <blockquote class="founder-{{ section.id }}__disarm">{{ s.disarm }}</blockquote>
+    {%- endif -%}
+
+    {%- if s.signoff != blank -%}
+      <p class="founder-{{ section.id }}__sign">{{ s.signoff | escape }}</p>
+    {%- endif -%}
+  </div>
+</section>
+
+{%- style -%}
+  .founder-{{ section.id }} {
+    background: var(--ascend-bg, #0B0D10);
+    color: var(--ascend-body, #C4CAD3);
+    padding-block: var(--ascend-pad-block, 5rem);
+    border-bottom: 1px solid var(--ascend-line, rgba(255,255,255,0.09));
+  }
+  .founder-{{ section.id }}__eyebrow { color: var(--ascend-muted, #8C94A0); }
+  .founder-{{ section.id }}__h {
+    font-family: var(--ascend-sans);
+    color: var(--ascend-ink, #EDF0F3);
+    font-size: clamp(1.6rem, 4.4vw, 2.4rem);
+    line-height: 1.16;
+    letter-spacing: -0.015em;
+    margin: 0 0 1.5rem;
+    max-width: 24ch;
+    text-wrap: balance;
+  }
+  .founder-{{ section.id }}__body {
+    font-family: var(--ascend-serif, Georgia, serif);
+    font-size: 1.12rem;
+    line-height: 1.72;
+    color: var(--ascend-body, #C4CAD3);
+    max-width: 58ch;
+  }
+  .founder-{{ section.id }}__body p { margin: 0 0 1.15rem; }
+  .founder-{{ section.id }}__disarm {
+    margin: 2rem 0 0;
+    padding: 1.2rem 1.4rem;
+    border-left: 3px solid var(--ascend-accent, #34B98C);
+    background: var(--ascend-surface, #161A20);
+    border-radius: 0 var(--ascend-radius, 12px) var(--ascend-radius, 12px) 0;
+    color: var(--ascend-ink, #EDF0F3);
+    font-size: 1.08rem;
+    line-height: 1.6;
+    max-width: 58ch;
+  }
+  .founder-{{ section.id }}__disarm p { margin: 0; }
+  .founder-{{ section.id }}__sign {
+    margin: 1.8rem 0 0;
+    font-size: 0.95rem;
+    color: var(--ascend-muted, #8C94A0);
+    letter-spacing: 0.02em;
+  }
+{%- endstyle -%}
+
+{% schema %}
+{
+  "name": "08 Founder — Anti-guru",
+  "tag": "section",
+  "class": "ascend-shell",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "Eyebrow", "default": "Who's behind this" },
+    {
+      "type": "richtext",
+      "id": "heading",
+      "label": "Heading",
+      "default": "<p>I'm not a mentor. I'm someone who had to build a fence around his own worst habit.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "story",
+      "label": "Founder story (PLACEHOLDER — replace with true events)",
+      "default": "<p>[PLACEHOLDER — replace with the true story.] For years I didn't have a strategy problem. I had a me problem. I could find the trade and then hand the profit straight back on three more I had no business taking. There was no Lambo, no beach, no 'freedom lifestyle' — just a screen, a smaller account than the month before, and the same promise to myself that I'd break by the next session.</p><p>[PLACEHOLDER] Discretion kept failing because discretion runs on willpower, and willpower runs out. So out of pure desperation I stopped trusting myself in the moment and wrote the decision down instead — a fixed gate that had to clear before I was allowed to click. Not because I'm disciplined. Because I'm not, and I needed something that didn't care how I felt.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "disarm",
+      "label": "Disarm line",
+      "default": "<p>&ldquo;If it worked, you'd just trade it, not sell it.&rdquo; Fair. The honest answer: the filter caps how much size I can take, and writing it down for other people is the thing that keeps me honest with it. I'm not claiming to be rich. I'm claiming to have stopped bleeding — and to know exactly why.</p>"
+    },
+    { "type": "text", "id": "signoff", "label": "Sign-off", "default": "— [Founder name], Ascend" }
+  ],
+  "presets": [{ "name": "08 Founder — Anti-guru" }]
+}
+{% endschema %}

@@ -1,0 +1,131 @@
+{
+  "sections": {
+    "ascend-tokens": {
+      "type": "ascend-tokens",
+      "settings": {}
+    },
+    "hero": {
+      "type": "hero-problem",
+      "settings": {}
+    },
+    "agitate": {
+      "type": "agitate",
+      "blocks": {
+        "c1": { "type": "contrast", "settings": { "disciplined": "You'd never push code without tests.", "then": "But you'll click in on a setup you can't name." } },
+        "c2": { "type": "contrast", "settings": { "disciplined": "You size positions to the pound on paper.", "then": "Then double down to 'make it back' before lunch." } },
+        "c3": { "type": "contrast", "settings": { "disciplined": "You wait for the data at work.", "then": "You front-run your own plan on a feeling." } }
+      },
+      "block_order": ["c1", "c2", "c3"],
+      "settings": {}
+    },
+    "real-cause": {
+      "type": "real-cause",
+      "settings": {}
+    },
+    "problem-mechanism": {
+      "type": "problem-mechanism",
+      "blocks": {
+        "s1": { "type": "step", "settings": { "title": "Stops cluster in the obvious spots", "text": "<p>Under the swing low, over the range high, on the round number — because that's what every guide taught.</p>" } },
+        "s2": { "type": "step", "settings": { "title": "A cluster of stops is a pool of liquidity", "text": "<p>Resting orders are fuel. To fill size, price has to trade into where those orders sit.</p>" } },
+        "s3": { "type": "step", "settings": { "title": "You enter without a filter", "text": "<p>You chase the move into the level — the same level everyone's stop is leaning on.</p>" } },
+        "s4": { "type": "step", "settings": { "title": "Price sweeps, then reverses", "text": "<p>The pool gets taken, your stop is part of it, and the real move happens without you.</p>" } }
+      },
+      "block_order": ["s1", "s2", "s3", "s4"],
+      "settings": {}
+    },
+    "solution": {
+      "type": "solution-mechanism",
+      "blocks": {
+        "f1": { "type": "flow", "settings": { "label": "1 · Sweep", "text": "A resting liquidity pool gets taken." } },
+        "f2": { "type": "flow", "settings": { "label": "2 · Shift", "text": "Break of structure or an inverse-FVG shift confirms." } },
+        "f3": { "type": "flow", "settings": { "label": "3 · Agree", "text": "ES and NQ both tell the same story." } },
+        "f4": { "type": "flow", "settings": { "label": "4 · Else", "text": "Any 'no' → stand down. No trade." } },
+        "k1": { "type": "check", "settings": { "rule": "A clear liquidity sweep has occurred (a known pool was taken)." } },
+        "k2": { "type": "check", "settings": { "rule": "Price rejects the swept level rather than accepting through it." } },
+        "k3": { "type": "check", "settings": { "rule": "A break of structure prints in your direction." } },
+        "k4": { "type": "check", "settings": { "rule": "An inverse FVG (fair value gap) flips to support your side." } },
+        "k5": { "type": "check", "settings": { "rule": "ES and NQ agree — no divergence pulling against you." } },
+        "k6": { "type": "check", "settings": { "rule": "Entry, stop and target are defined before you click." } },
+        "k7": { "type": "check", "settings": { "rule": "The setup sits inside your session and time window." } },
+        "k8": { "type": "check", "settings": { "rule": "You have taken zero revenge or 'make-it-back' trades today." } }
+      },
+      "block_order": ["f1", "f2", "f3", "f4", "k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8"],
+      "settings": {}
+    },
+    "what-you-get": {
+      "type": "what-you-get",
+      "blocks": {
+        "i1": { "type": "item", "settings": { "tag": "Core", "title": "The Full Written Playbook", "text": "<p>The complete 7-part system — from reading liquidity to the exact conditions that make a trade valid. Written to be read once and used forever.</p>" } },
+        "i2": { "type": "item", "settings": { "tag": "Do this pre-trade", "title": "The 8-Point Pre-Trade Checklist", "text": "<p>The gate as a printable list you run before every click. If it doesn't clear, you don't trade. That's the discipline, externalised.</p>" } },
+        "i3": { "type": "item", "settings": { "tag": "Prove it yourself", "title": "The Backtesting Method", "text": "<p>A step-by-step way to test the filter on your own historical data — so you trust it because you checked, not because a stranger told you to.</p>" } }
+      },
+      "block_order": ["i1", "i2", "i3"],
+      "settings": {}
+    },
+    "proof": {
+      "type": "proof",
+      "blocks": {
+        "a1": { "type": "annotation", "settings": { "note": "Placeholder — 1: the liquidity pool that gets swept (name the level and time)." } },
+        "a2": { "type": "annotation", "settings": { "note": "Placeholder — 2: the break of structure / inverse-FVG shift that confirmed." } },
+        "a3": { "type": "annotation", "settings": { "note": "Placeholder — 3: ES/NQ agreement (or the divergence that would have voided it)." } },
+        "a4": { "type": "annotation", "settings": { "note": "Placeholder — 4: the defined stop and where the idea was invalidated." } }
+      },
+      "block_order": ["a1", "a2", "a3", "a4"],
+      "settings": {}
+    },
+    "founder": {
+      "type": "founder",
+      "settings": {}
+    },
+    "faq": {
+      "type": "faq",
+      "blocks": {
+        "q1": { "type": "qa", "settings": { "question": "Another system? Seen one, seen 'em all.", "answer": "<p>Most 'systems' add another way to find trades. This does the opposite — it's a filter that removes trades. If you already have setups you like, keep them; the gate just decides which ones you're allowed to take.</p>", "open": true } },
+        "q2": { "type": "qa", "settings": { "question": "Why pay when everything's free on YouTube?", "answer": "<p>Because the problem was never a shortage of information. You already know more than enough to trade. What's missing is one written, pre-committed rule you'll actually follow — assembled in one place instead of scattered across 40 hours of videos you'll never re-watch.</p>", "open": false } },
+        "q3": { "type": "qa", "settings": { "question": "Does this work live, or just on demo?", "answer": "<p>The whole design assumption is that live is where discipline breaks. That's why the decision is made before the click, in writing — so the hard part isn't left to a stressed version of you. And you're told to backtest it on your own data first, so you're not finding out live.</p>", "open": false } },
+        "q4": { "type": "qa", "settings": { "question": "It looks too simple to be worth £35.", "answer": "<p>It is simple. That's the feature, not a bug — a rule you can run under pressure has to be simple. The value isn't complexity, it's the specific gate and the fact that you'll actually use it.</p>", "open": false } },
+        "q5": { "type": "qa", "settings": { "question": "I'll just break these rules too.", "answer": "<p>Maybe. A written gate won't chain your hands. But it does two things willpower can't: it makes breaking the rule a conscious choice you have to see yourself make, and it gives you a clean record of what happens when you do. Most people don't need more force — they need to stop lying to themselves in the moment.</p>", "open": false } },
+        "q6": { "type": "qa", "settings": { "question": "I'm not really a maths person.", "answer": "<p>There's no maths to be good at. The gate is a checklist of yes/no market conditions, in plain English. If you can read a chart well enough to lose money on it, you can read it well enough to run the filter.</p>", "open": false } },
+        "q7": { "type": "qa", "settings": { "question": "If it worked, you'd trade it — not sell it.", "answer": "<p>Reasonable suspicion. The honest version is in the founder note above: this is a process, not a profit machine, and it's sold as a one-off written kit — not a signal group I need you to renew. Read the risk warning; there are no income claims here on purpose.</p>", "open": false } },
+        "q8": { "type": "qa", "settings": { "question": "Does this even apply to me — I trade stocks, not ES/NQ?", "answer": "<p>It's written specifically for ES and NASDAQ intraday. The idea of filtering entries around liquidity is more general, but the exact rules, sessions and the ES/NQ agreement check are built for those two instruments. If you don't trade them, be honest with yourself about the fit before buying.</p>", "open": false } }
+      },
+      "block_order": ["q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8"],
+      "settings": {}
+    },
+    "price": {
+      "type": "price-cta",
+      "blocks": {
+        "p1": { "type": "include", "settings": { "item": "The Full Written Playbook (7-part system)" } },
+        "p2": { "type": "include", "settings": { "item": "The 8-Point Pre-Trade Checklist" } },
+        "p3": { "type": "include", "settings": { "item": "The Backtesting Method (verify it on your own data)" } }
+      },
+      "block_order": ["p1", "p2", "p3"],
+      "settings": {}
+    },
+    "compliance": {
+      "type": "compliance-footer",
+      "blocks": {
+        "l1": { "type": "link", "settings": { "label": "Terms of service" } },
+        "l2": { "type": "link", "settings": { "label": "Refund policy" } },
+        "l3": { "type": "link", "settings": { "label": "Privacy policy" } },
+        "l4": { "type": "link", "settings": { "label": "Contact" } }
+      },
+      "block_order": ["l1", "l2", "l3", "l4"],
+      "settings": {}
+    }
+  },
+  "order": [
+    "ascend-tokens",
+    "hero",
+    "agitate",
+    "real-cause",
+    "problem-mechanism",
+    "solution",
+    "what-you-get",
+    "proof",
+    "founder",
+    "faq",
+    "price",
+    "compliance"
+  ]
+}

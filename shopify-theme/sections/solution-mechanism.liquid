@@ -1,0 +1,249 @@
+{%- comment -%}
+  05 — SOLUTION / MECHANISM  (the tonal turn: dark -> clean/light)
+  The Liquidity-Reversal Filter: an 8-point rules-based gate.
+  Sweep -> break of structure / inverse FVG shift -> ES & NQ agree -> else stand down.
+  Belief installed: "Discipline becomes something I follow, not something I summon."
+{%- endcomment -%}
+
+{%- assign s = section.settings -%}
+<section class="ascend-section sol-{{ section.id }}" aria-labelledby="sol-{{ section.id }}-h">
+  <div class="ascend-wrap ascend-wrap--wide">
+    <div class="sol-{{ section.id }}__head">
+      {%- if s.eyebrow != blank -%}
+        <p class="ascend-eyebrow sol-{{ section.id }}__eyebrow">{{ s.eyebrow | escape }}</p>
+      {%- endif -%}
+      <h2 id="sol-{{ section.id }}-h" class="sol-{{ section.id }}__h">{{ s.heading }}</h2>
+      {%- if s.intro != blank -%}
+        <div class="sol-{{ section.id }}__intro">{{ s.intro }}</div>
+      {%- endif -%}
+    </div>
+
+    {%- liquid
+      assign flow_count = 0
+      assign check_count = 0
+      for block in section.blocks
+        case block.type
+          when 'flow'
+            assign flow_count = flow_count | plus: 1
+          when 'check'
+            assign check_count = check_count | plus: 1
+        endcase
+      endfor
+    -%}
+
+    {%- if flow_count > 0 -%}
+      <ol class="sol-{{ section.id }}__flow" aria-label="{{ s.flow_label | default: 'The filter in four moves' | escape }}">
+        {%- for block in section.blocks -%}
+          {%- if block.type == 'flow' -%}
+            <li class="sol-{{ section.id }}__flowstep" {{ block.shopify_attributes }}>
+              <span class="sol-{{ section.id }}__flowlabel">{{ block.settings.label | escape }}</span>
+              <span class="sol-{{ section.id }}__flowtext">{{ block.settings.text | escape }}</span>
+            </li>
+          {%- endif -%}
+        {%- endfor -%}
+      </ol>
+    {%- endif -%}
+
+    <div class="sol-{{ section.id }}__gate">
+      <h3 class="sol-{{ section.id }}__gateh">{{ s.gate_title | default: 'The 8-point gate' | escape }}</h3>
+      {%- if s.gate_note != blank -%}<p class="sol-{{ section.id }}__gatenote">{{ s.gate_note }}</p>{%- endif -%}
+      {%- if check_count > 0 -%}
+        <ul class="sol-{{ section.id }}__checks">
+          {%- assign cnum = 0 -%}
+          {%- for block in section.blocks -%}
+            {%- if block.type == 'check' -%}
+              {%- assign cnum = cnum | plus: 1 -%}
+              <li class="sol-{{ section.id }}__check" {{ block.shopify_attributes }}>
+                <span class="sol-{{ section.id }}__checkbox" aria-hidden="true">{{ cnum }}</span>
+                <span class="sol-{{ section.id }}__checktext">{{ block.settings.rule | escape }}</span>
+              </li>
+            {%- endif -%}
+          {%- endfor -%}
+        </ul>
+      {%- endif -%}
+      {%- if s.standdown != blank -%}
+        <p class="sol-{{ section.id }}__standdown">{{ s.standdown }}</p>
+      {%- endif -%}
+    </div>
+
+    {%- if s.payoff != blank -%}
+      <p class="sol-{{ section.id }}__payoff">{{ s.payoff }}</p>
+    {%- endif -%}
+  </div>
+</section>
+
+{%- style -%}
+  .sol-{{ section.id }} {
+    background: var(--ascend-surface-light, #F5F7F9);
+    color: var(--ascend-body-dark, #3A434E);
+    padding-block: calc(var(--ascend-pad-block, 5rem) + 1rem);
+    border-bottom: 1px solid var(--ascend-line-dark, rgba(17,24,32,0.12));
+  }
+  .sol-{{ section.id }}__head { max-width: 42ch; }
+  .sol-{{ section.id }}__eyebrow { color: var(--ascend-accent, #34B98C); }
+  .sol-{{ section.id }}__h {
+    font-family: var(--ascend-sans);
+    color: var(--ascend-ink-dark, #111820);
+    font-size: clamp(1.8rem, 5vw, 2.9rem);
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+    margin: 0 0 1.2rem;
+    text-wrap: balance;
+  }
+  .sol-{{ section.id }}__intro { font-size: 1.1rem; line-height: 1.6; color: var(--ascend-body-dark, #3A434E); }
+  .sol-{{ section.id }}__intro p { margin: 0 0 1rem; }
+
+  .sol-{{ section.id }}__flow {
+    list-style: none;
+    margin: 2.5rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 0.75rem;
+  }
+  .sol-{{ section.id }}__flowstep {
+    position: relative;
+    padding: 1rem 1.15rem;
+    background: #fff;
+    border: 1px solid var(--ascend-line-dark, rgba(17,24,32,0.12));
+    border-radius: var(--ascend-radius, 12px);
+    display: grid;
+    gap: 0.3rem;
+  }
+  .sol-{{ section.id }}__flowlabel {
+    font-size: 0.74rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--ascend-accent, #34B98C);
+  }
+  .sol-{{ section.id }}__flowtext { color: var(--ascend-ink-dark, #111820); font-size: 1rem; line-height: 1.45; }
+
+  .sol-{{ section.id }}__gate {
+    margin: 2rem 0 0;
+    padding: clamp(1.5rem, 4vw, 2.25rem);
+    background: #fff;
+    border: 1px solid var(--ascend-line-dark, rgba(17,24,32,0.12));
+    border-radius: calc(var(--ascend-radius, 12px) + 4px);
+    box-shadow: 0 20px 50px -34px rgba(17,24,32,0.4);
+  }
+  .sol-{{ section.id }}__gateh {
+    margin: 0 0 0.4rem;
+    font-size: 1.25rem;
+    color: var(--ascend-ink-dark, #111820);
+  }
+  .sol-{{ section.id }}__gatenote { margin: 0 0 1.4rem; color: var(--ascend-body-dark, #3A434E); line-height: 1.55; }
+  .sol-{{ section.id }}__gatenote p { margin: 0; }
+  .sol-{{ section.id }}__checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+  .sol-{{ section.id }}__check { display: grid; grid-template-columns: auto 1fr; gap: 0.85rem; align-items: start; }
+  .sol-{{ section.id }}__checkbox {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.6rem; height: 1.6rem; flex: none;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--ascend-accent, #34B98C) 16%, #fff);
+    color: color-mix(in srgb, var(--ascend-accent, #34B98C) 75%, #08120E);
+    font-size: 0.82rem; font-weight: 700;
+  }
+  .sol-{{ section.id }}__checktext { color: var(--ascend-ink-dark, #111820); line-height: 1.5; padding-top: 0.1rem; }
+  .sol-{{ section.id }}__standdown {
+    margin: 1.6rem 0 0; padding: 0.9rem 1.1rem;
+    background: color-mix(in srgb, var(--ascend-loss, #C85248) 8%, #fff);
+    border: 1px solid color-mix(in srgb, var(--ascend-loss, #C85248) 30%, transparent);
+    border-radius: 8px;
+    color: color-mix(in srgb, var(--ascend-loss, #C85248) 78%, #111820);
+    font-size: 0.98rem; line-height: 1.5;
+  }
+  .sol-{{ section.id }}__standdown p { margin: 0; }
+  .sol-{{ section.id }}__payoff {
+    margin: 2.4rem auto 0;
+    font-family: var(--ascend-serif, Georgia, serif);
+    font-size: clamp(1.3rem, 3.6vw, 1.85rem);
+    line-height: 1.35;
+    color: var(--ascend-ink-dark, #111820);
+    max-width: 30ch;
+    text-wrap: balance;
+  }
+  @media (min-width: 760px) {
+    .sol-{{ section.id }}__flow { grid-template-columns: repeat(4, 1fr); }
+    .sol-{{ section.id }}__checks { grid-template-columns: 1fr 1fr; gap: 0.85rem 2rem; }
+  }
+{%- endstyle -%}
+
+{% schema %}
+{
+  "name": "05 Solution — The Filter",
+  "tag": "section",
+  "class": "ascend-shell",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "Eyebrow", "default": "The mechanism" },
+    {
+      "type": "richtext",
+      "id": "heading",
+      "label": "Heading",
+      "default": "<p>The Liquidity-Reversal Filter: a gate, not a feeling.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "intro",
+      "label": "Intro",
+      "default": "<p>Instead of asking 'does this look good?', the filter asks a fixed sequence of yes/no questions. If every answer isn't yes, there is no trade — and that decision was made before the candle ever printed, back when you were calm.</p>"
+    },
+    { "type": "text", "id": "flow_label", "label": "Flow aria-label", "default": "The filter in four moves" },
+    { "type": "text", "id": "gate_title", "label": "Gate title", "default": "The 8-point gate" },
+    {
+      "type": "richtext",
+      "id": "gate_note",
+      "label": "Gate note",
+      "default": "<p>Every point has to clear before you're allowed to click. Miss one, and the answer is already decided.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "standdown",
+      "label": "Stand-down rule",
+      "default": "<p><strong>Else: stand down.</strong> A skipped trade costs you nothing. That is the whole point — the filter's job is to make the 'no' for you.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "payoff",
+      "label": "Payoff line",
+      "default": "<p>Discipline stops being something you summon at the worst moment. It becomes something you simply follow.</p>"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "flow",
+      "name": "Flow step",
+      "settings": [
+        { "type": "text", "id": "label", "label": "Label", "default": "Sweep" },
+        { "type": "text", "id": "text", "label": "Text", "default": "A liquidity pool gets taken." }
+      ]
+    },
+    {
+      "type": "check",
+      "name": "Gate rule",
+      "settings": [
+        { "type": "text", "id": "rule", "label": "Rule", "default": "A clear liquidity sweep has occurred." }
+      ]
+    }
+  ],
+  "max_blocks": 14,
+  "presets": [
+    {
+      "name": "05 Solution — The Filter",
+      "blocks": [
+        { "type": "flow", "settings": { "label": "1 · Sweep", "text": "A resting liquidity pool gets taken." } },
+        { "type": "flow", "settings": { "label": "2 · Shift", "text": "Break of structure or an inverse-FVG shift confirms." } },
+        { "type": "flow", "settings": { "label": "3 · Agree", "text": "ES and NQ both tell the same story." } },
+        { "type": "flow", "settings": { "label": "4 · Else", "text": "Any 'no' → stand down. No trade." } },
+        { "type": "check", "settings": { "rule": "A clear liquidity sweep has occurred (a known pool was taken)." } },
+        { "type": "check", "settings": { "rule": "Price rejects the swept level rather than accepting through it." } },
+        { "type": "check", "settings": { "rule": "A break of structure prints in your direction." } },
+        { "type": "check", "settings": { "rule": "An inverse FVG (fair value gap) flips to support your side." } },
+        { "type": "check", "settings": { "rule": "ES and NQ agree — no divergence pulling against you." } },
+        { "type": "check", "settings": { "rule": "Entry, stop and target are defined before you click." } },
+        { "type": "check", "settings": { "rule": "The setup sits inside your session and time window." } },
+        { "type": "check", "settings": { "rule": "You have taken zero revenge or 'make-it-back' trades today." } }
+      ]
+    }
+  ]
+}
+{% endschema %}

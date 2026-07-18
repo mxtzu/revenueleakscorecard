@@ -1,0 +1,144 @@
+{%- comment -%}
+  09 — OBJECTION / FAQ (accordion)
+  Native <details>/<summary> — fully keyboard-accessible, no JS required.
+  Pre-empts objections in the audience's own words.
+{%- endcomment -%}
+
+{%- assign s = section.settings -%}
+<section class="ascend-section faq-{{ section.id }}" aria-labelledby="faq-{{ section.id }}-h">
+  <div class="ascend-wrap">
+    {%- if s.eyebrow != blank -%}
+      <p class="ascend-eyebrow faq-{{ section.id }}__eyebrow">{{ s.eyebrow | escape }}</p>
+    {%- endif -%}
+    <h2 id="faq-{{ section.id }}-h" class="faq-{{ section.id }}__h">{{ s.heading }}</h2>
+    {%- if s.intro != blank -%}<div class="faq-{{ section.id }}__intro">{{ s.intro }}</div>{%- endif -%}
+
+    {%- if section.blocks.size > 0 -%}
+      <div class="faq-{{ section.id }}__list">
+        {%- for block in section.blocks -%}
+          <details class="faq-{{ section.id }}__item" {% if block.settings.open %}open{% endif %} {{ block.shopify_attributes }}>
+            <summary class="faq-{{ section.id }}__q">
+              <span class="faq-{{ section.id }}__qtext">{{ block.settings.question | escape }}</span>
+              <span class="faq-{{ section.id }}__icon" aria-hidden="true"></span>
+            </summary>
+            <div class="faq-{{ section.id }}__a">{{ block.settings.answer }}</div>
+          </details>
+        {%- endfor -%}
+      </div>
+    {%- endif -%}
+  </div>
+</section>
+
+{%- style -%}
+  .faq-{{ section.id }} {
+    background: var(--ascend-bg-2, #101319);
+    color: var(--ascend-body, #C4CAD3);
+    padding-block: var(--ascend-pad-block, 5rem);
+    border-bottom: 1px solid var(--ascend-line, rgba(255,255,255,0.09));
+  }
+  .faq-{{ section.id }}__eyebrow { color: var(--ascend-muted, #8C94A0); }
+  .faq-{{ section.id }}__h {
+    font-family: var(--ascend-sans);
+    color: var(--ascend-ink, #EDF0F3);
+    font-size: clamp(1.6rem, 4.4vw, 2.4rem);
+    line-height: 1.16;
+    letter-spacing: -0.015em;
+    margin: 0 0 1rem;
+    max-width: 22ch;
+    text-wrap: balance;
+  }
+  .faq-{{ section.id }}__intro { font-size: 1.05rem; line-height: 1.6; max-width: 52ch; color: var(--ascend-body, #C4CAD3); }
+  .faq-{{ section.id }}__intro p { margin: 0; }
+  .faq-{{ section.id }}__list {
+    margin: 2rem 0 0;
+    border: 1px solid var(--ascend-line, rgba(255,255,255,0.09));
+    border-radius: var(--ascend-radius, 12px);
+    overflow: hidden;
+  }
+  .faq-{{ section.id }}__item { border-top: 1px solid var(--ascend-line, rgba(255,255,255,0.09)); background: var(--ascend-surface, #161A20); }
+  .faq-{{ section.id }}__item:first-child { border-top: 0; }
+  .faq-{{ section.id }}__q {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 1.15rem 1.3rem;
+    cursor: pointer;
+    list-style: none;
+    color: var(--ascend-ink, #EDF0F3);
+    font-weight: 600;
+    font-size: 1.02rem;
+  }
+  .faq-{{ section.id }}__q::-webkit-details-marker { display: none; }
+  .faq-{{ section.id }}__q:focus-visible { outline: 3px solid var(--ascend-focus, #6FB0FF); outline-offset: -3px; }
+  .faq-{{ section.id }}__qtext { line-height: 1.4; }
+  .faq-{{ section.id }}__icon {
+    position: relative; width: 1rem; height: 1rem; flex: none; margin-top: 0.15rem;
+  }
+  .faq-{{ section.id }}__icon::before,
+  .faq-{{ section.id }}__icon::after {
+    content: ""; position: absolute; background: var(--ascend-muted, #8C94A0);
+    transition: transform 160ms ease;
+  }
+  .faq-{{ section.id }}__icon::before { top: 50%; left: 0; width: 100%; height: 2px; transform: translateY(-50%); }
+  .faq-{{ section.id }}__icon::after { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
+  .faq-{{ section.id }}__item[open] .faq-{{ section.id }}__icon::after { transform: translateX(-50%) scaleY(0); }
+  .faq-{{ section.id }}__a {
+    padding: 0 1.3rem 1.3rem;
+    color: var(--ascend-body, #C4CAD3);
+    line-height: 1.62;
+    max-width: 62ch;
+  }
+  .faq-{{ section.id }}__a p { margin: 0 0 0.85rem; }
+  .faq-{{ section.id }}__a p:last-child { margin-bottom: 0; }
+  @media (prefers-reduced-motion: reduce) {
+    .faq-{{ section.id }}__icon::before, .faq-{{ section.id }}__icon::after { transition: none; }
+  }
+{%- endstyle -%}
+
+{% schema %}
+{
+  "name": "09 FAQ — Objections",
+  "tag": "section",
+  "class": "ascend-shell",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "Eyebrow", "default": "The questions you're already asking" },
+    {
+      "type": "richtext",
+      "id": "heading",
+      "label": "Heading",
+      "default": "<p>You've been burned before. So let's do the objections first.</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "intro",
+      "label": "Intro",
+      "default": "<p>No pressure and no hard sell — if a straight answer doesn't land, this isn't for you, and that's fine.</p>"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "qa",
+      "name": "Question",
+      "settings": [
+        { "type": "text", "id": "question", "label": "Question", "default": "Another system? Seen one, seen 'em all." },
+        { "type": "richtext", "id": "answer", "label": "Answer", "default": "<p>Fair. Most 'systems' are a fresh coat of paint on 'find good trades'.</p>" },
+        { "type": "checkbox", "id": "open", "label": "Open by default", "default": false }
+      ]
+    }
+  ],
+  "max_blocks": 12,
+  "presets": [
+    {
+      "name": "09 FAQ — Objections",
+      "blocks": [
+        { "type": "qa", "settings": { "question": "Another system? Seen one, seen 'em all.", "answer": "<p>Most 'systems' add another way to find trades. This does the opposite — it's a filter that removes trades. If you already have setups you like, keep them; the gate just decides which ones you're allowed to take.</p>", "open": true } },
+        { "type": "qa", "settings": { "question": "Why pay when everything's free on YouTube?", "answer": "<p>Because the problem was never a shortage of information. You already know more than enough to trade. What's missing is one written, pre-committed rule you'll actually follow — assembled in one place instead of scattered across 40 hours of videos you'll never re-watch.</p>", "open": false } },
+        { "type": "qa", "settings": { "question": "Does this work live, or just on demo?", "answer": "<p>The whole design assumption is that live is where discipline breaks. That's why the decision is made before the click, in writing — so the hard part isn't left to a stressed version of you. And you're told to backtest it on your own data first, so you're not finding out live.</p>", "open": false } },
+        { "type": "qa", "settings": { "question": "It looks too simple to be worth £35.", "answer": "<p>It is simple. That's the feature, not a bug — a rule you can run under pressure has to be simple. The value isn't complexity, it's the specific gate and the fact that you'll actually use it.</p>", "open": false } },
+        { "type": "qa", "settings": { "question": "I'll just break these rules too.", "answer": "<p>Maybe. A written gate won't chain your hands. But it does two things willpower can't: it makes breaking the rule a conscious choice you have to see yourself make, and it gives you a clean record of what happens when you do. Most people don't need more force — they need to stop lying to themselves in the moment.</p>", "open": false } },
+        { "type": "qa", "settings": { "question": "I'm not really a maths person.", "answer": "<p>There's no maths to be good at. The gate is a checklist of yes/no market conditions, in plain English. If you can read a chart well enough to lose money on it, you can read it well enough to run the filter.</p>", "open": false } },
+        { "type": "qa", "settings": { "question": "If it worked, you'd trade it — not sell it.", "answer": "<p>Reasonable suspicion. The honest version is in the founder note above: this is a process, not a profit machine, and it's sold as a one-off written kit — not a signal group I need you to renew. Read the risk warning; there are no income claims here on purpose.</p>", "open": false } },
+        { "type": "qa", "settings": { "question": "Does this even apply to me — I trade stocks, not ES/NQ?", "answer": "<p>It's written specifically for ES and NASDAQ intraday. The idea of filtering entries around liquidity is more general, but the exact rules, sessions and the ES/NQ agreement check are built for those two instruments. If you don't trade them, be honest with yourself about the fit before buying.</p>", "open": false } }
+      ]
+    }
+  ]
+}
+{% endschema %}

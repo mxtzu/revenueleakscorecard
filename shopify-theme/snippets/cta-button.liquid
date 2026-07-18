@@ -1,0 +1,34 @@
+{%- comment -%}
+  Renders an accessible call-to-action button/link.
+
+  Accepts:
+  - label      {String}  Visible button text (required)
+  - url        {String}  Destination (required)
+  - style      {String}  "primary" (default) | "ghost"
+  - full_width {Boolean} Stretch to container width (default false)
+  - subtext    {String}  Optional reassurance line under the button
+  - id         {String}  Optional DOM id (for aria / analytics)
+
+  Usage:
+  {% render 'cta-button', label: 'Get the Playbook', url: product.url, style: 'primary' %}
+{%- endcomment -%}
+
+{%- liquid
+  assign btn_style = style | default: 'primary'
+  assign is_full = full_width | default: false
+-%}
+
+<span class="ascend-cta{% if is_full %} ascend-cta--block{% endif %}">
+  <a
+    class="ascend-cta__link ascend-cta__link--{{ btn_style }}"
+    href="{{ url | default: '#' }}"
+    {% if id %}id="{{ id }}"{% endif %}
+  >
+    {{ label | default: 'Read on' | escape }}
+  </a>
+  {%- if subtext != blank -%}
+    <span class="ascend-cta__subtext">{{ subtext | escape }}</span>
+  {%- endif -%}
+</span>
+
+{%- comment -%} CTA styles are emitted once via ascend-tokens; these are the fallbacks if that section is absent. {%- endcomment -%}
