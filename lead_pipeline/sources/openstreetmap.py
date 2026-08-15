@@ -81,6 +81,7 @@ class OpenStreetMapSource(BaseSource):
 
         # Rate-limit whichever endpoint is configured, not just the default host.
         ctx.client.limiter.set_host_rate(self._endpoint_host(), self.default_rate_per_second or 0.5)
+        self.logger.debug("Querying Overpass", extra={"endpoint": self._endpoint()})
 
         radius_m = int(min(MAX_SEARCH_RADIUS_KM * 1000, max(1_000, query.radius_km * 1000)))
         accepted_tags = self._accepted_tags(query)
@@ -173,7 +174,7 @@ class OpenStreetMapSource(BaseSource):
                 )
                 self.logger.warning(
                     "Overpass accepted the query but could not complete it: %s" % remark,
-                    extra={"location": location.label, "elements": len((payload or {}).get("elements") or [])},
+                    extra={"endpoint": self._endpoint(), "location": location.label},
                 )
                 # HTTP was fine, so the caller is free to retry something cheaper.
                 return (None, 200)
@@ -195,8 +196,8 @@ class OpenStreetMapSource(BaseSource):
             else:
                 self.logger.warning(
                     "Overpass query failed",
-                    extra={"location": location.label, "error": str(exc),
-                           "query": overpass_query[:400]},
+                    extra={"endpoint": self._endpoint(), "location": location.label,
+                           "error": str(exc), "query": overpass_query[:200]},
                 )
             return (None, exc.status)
 
