@@ -9,3 +9,14 @@ dist
 .tools
 *.tsbuildinfo
 verification-*.png
+
+# lead_pipeline (Python)
+.venv
+venv
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.lead_pipeline_cache/
+*.sqlite
+*.sqlite3
+output/

@@ -76,6 +76,18 @@ scores, revenue band, UTMs) plus nested answers and tracking context.
 NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 ```
 
+## Lead pipeline (separate tool)
+
+`lead_pipeline/` is a self-contained Python CLI that finds, enriches,
+deduplicates, scores and exports local businesses as agency prospects. It is
+independent of this Next.js app — separate dependencies, separate config,
+separate database. See [`lead_pipeline/README.md`](lead_pipeline/README.md).
+
+```bash
+cd lead_pipeline && pip install -r requirements.txt
+python pipeline.py --niche roofers --location "Sunderland" --radius 25
+```
+
 ## Deployment
 
 Vercel, no special settings. The GitHub Pages workflow (`GITHUB_PAGES=true` static
