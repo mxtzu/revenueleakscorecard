@@ -35,7 +35,7 @@ from lead_pipeline.runner import Pipeline, PipelineConfig  # noqa: E402
 from lead_pipeline.scoring.niche_rules import assess_niche  # noqa: E402
 from lead_pipeline.scoring.opportunities import build_audit_record  # noqa: E402
 from lead_pipeline.sources import DEFAULT_DISCOVERY_ORDER, SOURCE_CLASSES, available_sources  # noqa: E402
-from lead_pipeline.utils.geo import load_locations_csv, parse_location  # noqa: E402
+from lead_pipeline.utils.geo import MAX_SEARCH_RADIUS_KM, load_locations_csv, parse_location  # noqa: E402
 from lead_pipeline.utils.logging import setup_logging  # noqa: E402
 
 
@@ -246,6 +246,16 @@ def main(argv: list[str] | None = None) -> int:
             return 2
     if not locations:
         parser.error("provide at least one --location or an --input CSV")
+
+    if any(loc.radius_km > MAX_SEARCH_RADIUS_KM for loc in locations):
+        print(
+            f"NOTE: --radius {radius:g} exceeds the {MAX_SEARCH_RADIUS_KM:g} km maximum the "
+            f"discovery APIs accept (Google Places caps its search circle there, and a wider "
+            f"Overpass query is refused), so {MAX_SEARCH_RADIUS_KM:g} km will be used.\n"
+            f"      To cover a larger area, pass several --location values or an --input CSV; "
+            f"results are deduplicated across them.",
+            file=sys.stderr,
+        )
 
     formats = args.format or ["csv", "json"]
     source_names = []

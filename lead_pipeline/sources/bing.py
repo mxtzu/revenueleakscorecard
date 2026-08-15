@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any, AsyncIterator
 
 from ..models import SourceRecord
-from ..utils.geo import within_radius
+from ..utils.geo import MAX_SEARCH_RADIUS_KM, within_radius
 from ..utils.http import HttpError
 from ..utils.normalization import clean_text
 from .base import BaseSource, SearchQuery, SourceContext
@@ -37,7 +37,7 @@ class BingPlacesSource(BaseSource):
             return
 
         emitted = 0
-        radius_km = min(50.0, max(1.0, query.radius_km))
+        radius_km = min(MAX_SEARCH_RADIUS_KM, max(1.0, query.radius_km))
         for term in query.terms():
             if emitted >= query.limit:
                 break

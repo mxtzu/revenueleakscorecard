@@ -16,7 +16,7 @@ from typing import Any, AsyncIterator
 from urllib.parse import urlencode, urlsplit
 
 from ..models import SourceRecord
-from ..utils.geo import within_radius
+from ..utils.geo import MAX_SEARCH_RADIUS_KM, within_radius
 from ..utils.http import HttpError
 from ..utils.normalization import clean_text
 from .base import BaseSource, SearchQuery, SourceContext
@@ -81,7 +81,7 @@ class OpenStreetMapSource(BaseSource):
         # Rate-limit whichever endpoint is configured, not just the default host.
         ctx.client.limiter.set_host_rate(self._endpoint_host(), self.default_rate_per_second or 0.5)
 
-        radius_m = int(min(50_000, max(1_000, query.radius_km * 1000)))
+        radius_m = int(min(MAX_SEARCH_RADIUS_KM * 1000, max(1_000, query.radius_km * 1000)))
         accepted_tags = self._accepted_tags(query)
 
         payload, status = await self._run_query(self._build_query(query, radius_m), location, ctx)

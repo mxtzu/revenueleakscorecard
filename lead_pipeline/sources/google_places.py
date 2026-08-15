@@ -13,7 +13,7 @@ import asyncio
 from typing import Any, AsyncIterator
 
 from ..models import SourceRecord
-from ..utils.geo import within_radius
+from ..utils.geo import MAX_SEARCH_RADIUS_KM, within_radius
 from ..utils.http import HttpError
 from ..utils.normalization import clean_text
 from .base import BaseSource, SearchQuery, SourceContext
@@ -109,7 +109,7 @@ class GooglePlacesSource(BaseSource):
                                 "latitude": query.location.latitude,
                                 "longitude": query.location.longitude,
                             },
-                            "radius": min(50_000.0, max(1.0, query.radius_km * 1000)),
+                            "radius": min(MAX_SEARCH_RADIUS_KM * 1000, max(1.0, query.radius_km * 1000)),
                         }
                     }
                 if page_token:

@@ -18,6 +18,12 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 
 EARTH_RADIUS_KM = 6371.0088
 
+#: Largest radius any discovery source accepts. Google Places caps its circular
+#: locationBias at 50 km, and a wider Overpass query is refused as too
+#: expensive. Cover a bigger area with several locations instead - results are
+#: deduplicated across them.
+MAX_SEARCH_RADIUS_KM = 50.0
+
 #: Column names recognised in a locations CSV.
 LOCATION_CSV_HEADERS = {
     "location", "city", "town", "postcode", "area", "region", "county", "country",
