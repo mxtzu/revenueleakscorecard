@@ -322,11 +322,23 @@ class Pipeline:
     #: the run. A public API having a bad day should cost one or two slow
     #: queries, not one per niche x location.
     SOURCE_FAILURE_LIMIT = 3
+    MAX_SOURCE_FAILURE_LIMIT = 10
+
+    def _source_failure_limit(self) -> int:
+        """Tolerate a longer bad patch on a long run.
+
+        Three consecutive failures means "dead" in a 10-query run, but a
+        120-query sweep can hit a transient patch that size and recover, and
+        cutting it short there would lose far more than it saves.
+        """
+        planned = max(1, len(self.config.niches) * len(self.config.locations))
+        return max(self.SOURCE_FAILURE_LIMIT, min(self.MAX_SOURCE_FAILURE_LIMIT, planned // 10))
 
     async def _discover(self, sources: Sequence[BaseSource]) -> list[Lead]:
         leads: list[Lead] = []
         consecutive_failures: dict[str, int] = {}
         exhausted: set[str] = set()
+        failure_limit = self._source_failure_limit()
         for niche in self.config.niches:
             for location in self.config.locations:
                 if self._interrupted.is_set():
@@ -380,7 +392,7 @@ class Pipeline:
                         consecutive_failures[source.name] = (
                             consecutive_failures.get(source.name, 0) + 1
                         )
-                        if consecutive_failures[source.name] >= self.SOURCE_FAILURE_LIMIT:
+                        if consecutive_failures[source.name] >= failure_limit:
                             exhausted.add(source.name)
                             note = (
                                 f"Source '{source.name}' failed "

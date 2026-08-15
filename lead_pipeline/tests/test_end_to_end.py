@@ -415,8 +415,33 @@ async def test_repeatedly_failing_source_is_dropped(settings, tmp_path):
     # Drive discovery directly so the source list is not rebuilt.
     await pipeline._discover(pipeline._sources)
 
-    assert attempts["n"] == Pipeline.SOURCE_FAILURE_LIMIT, (
+    assert attempts["n"] == pipeline._source_failure_limit(), (
         "should stop after the failure limit, not try all 10 niches"
     )
     assert any("skipped for the rest of this run" in n for n in pipeline.stats.notes)
     db.close()
+
+
+def test_failure_limit_scales_with_run_size(settings, tmp_path):
+    """A long sweep must tolerate a bigger transient bad patch than a short one."""
+    registry = load_niches()
+
+    def limit_for(n_locations: int) -> int:
+        locations = []
+        for i in range(n_locations):
+            loc = parse_location(f"Town {i}", radius_km=20)
+            loc.latitude, loc.longitude, loc.geocoded = 54.9 + i / 100, -1.4, True
+            locations.append(loc)
+        config = PipelineConfig(
+            niches=registry.all(), locations=locations, source_names=["openstreetmap"],
+            formats=[], output_dir=tmp_path / "o",
+        )
+        db = Database(tmp_path / f"limit{n_locations}.sqlite")
+        try:
+            return Pipeline(settings, config, database=db, transport=FakeTransport())._source_failure_limit()
+        finally:
+            db.close()
+
+    assert limit_for(1) == 3            # 10 queries - three failures means dead
+    assert limit_for(12) == 10          # 120 queries - ride out a longer patch
+    assert limit_for(100) == 10         # capped
