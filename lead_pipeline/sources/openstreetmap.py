@@ -102,18 +102,35 @@ class OpenStreetMapSource(BaseSource):
         elements = (payload or {}).get("elements") or []
         emitted = 0
         seen: set[str] = set()
+        # Why elements were dropped - otherwise "found=0" cannot be told apart
+        # from "the API returned nothing".
+        skipped = {"unnamed": 0, "outside_radius": 0, "wrong_niche": 0, "duplicate": 0}
         for element in elements:
             if emitted >= query.limit:
                 break
-            record = self._to_record(element, query, accepted_tags)
+            record = self._to_record(element, query, accepted_tags, skipped)
             if record is None:
                 continue
             key = record.source_record_id or record.data.get("company_name", "")
             if key in seen:
+                skipped["duplicate"] += 1
                 continue
             seen.add(key)
             emitted += 1
             yield record
+
+        log = self.logger.info if elements else self.logger.warning
+        log(
+            "Overpass returned %d element(s); kept %d" % (len(elements), emitted),
+            extra={
+                "location": location.label, "niche": query.niche.key,
+                "elements": len(elements), "kept": emitted, **skipped,
+                "hint": (
+                    "OpenStreetMap has no matching POIs here - coverage of trades is patchy. "
+                    "Widen --radius, or use Google Places for real coverage."
+                ) if not elements else "",
+            },
+        )
 
     # ------------------------------------------------------------------
     def _endpoint(self) -> str:
@@ -226,20 +243,28 @@ class OpenStreetMapSource(BaseSource):
         return accepted
 
     def _to_record(
-        self, element: dict[str, Any], query: SearchQuery, accepted_tags: set[tuple[str, str]]
+        self,
+        element: dict[str, Any],
+        query: SearchQuery,
+        accepted_tags: set[tuple[str, str]],
+        skipped: dict[str, int] | None = None,
     ) -> SourceRecord | None:
+        counts = skipped if skipped is not None else {}
         tags = element.get("tags") or {}
         name = clean_text(tags.get("name") or tags.get("brand") or tags.get("operator") or "")
         if not name:
+            counts["unnamed"] = counts.get("unnamed", 0) + 1
             return None
 
         center = element.get("center") or {}
         latitude = element.get("lat") if element.get("lat") is not None else center.get("lat")
         longitude = element.get("lon") if element.get("lon") is not None else center.get("lon")
         if not within_radius(query.location, latitude, longitude):
+            counts["outside_radius"] = counts.get("outside_radius", 0) + 1
             return None
 
         if not self._is_relevant(name, tags, query, accepted_tags):
+            counts["wrong_niche"] = counts.get("wrong_niche", 0) + 1
             return None
 
         street = clean_text(tags.get("addr:street") or "")
