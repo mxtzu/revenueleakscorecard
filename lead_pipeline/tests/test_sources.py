@@ -14,10 +14,10 @@ from lead_pipeline.sources.companies_house import CompaniesHouseSource, years_si
 from lead_pipeline.sources.directories import DirectorySource
 from lead_pipeline.sources.fixture import FixtureSource
 from lead_pipeline.sources.google_places import GooglePlacesSource
-from lead_pipeline.sources.openstreetmap import OpenStreetMapSource
+from lead_pipeline.sources.openstreetmap import GENERIC_NAME_WORDS, OpenStreetMapSource
 from lead_pipeline.sources.search import SearchSource
 from lead_pipeline.utils.geo import parse_location
-from lead_pipeline.utils.http import FakeTransport, HttpClient
+from lead_pipeline.utils.http import FakeTransport, HttpClient, Response
 from lead_pipeline.utils.rate_limit import RateLimiter
 
 PACKAGE_FIXTURES = __import__("pathlib").Path(__file__).resolve().parents[1] / "fixtures"
@@ -258,6 +258,96 @@ class TestOpenStreetMap:
         assert "around:30000,54.9783,-1.6178" in overpass
         assert 'amenity"="dentist' in overpass
         assert overpass.startswith("[out:json]")
+
+    def test_out_statement_uses_the_grammar_order(self, settings, registry, newcastle):
+        """`out` takes verbosity, then geometry, then sort, then limit."""
+        source = OpenStreetMapSource(settings)
+        query = SearchQuery(niche=registry.get("roofers"), location=newcastle, limit=5)
+        overpass = source._build_query(query, 25000)
+        assert overpass.rstrip().endswith("out tags center 400;")
+        assert "out center tags" not in overpass
+
+    def test_name_regexes_exclude_generic_words(self, settings, registry, newcastle):
+        """A generic word matches thousands of features and Overpass refuses it."""
+        source = OpenStreetMapSource(settings)
+        for niche in registry.all():
+            query = SearchQuery(niche=niche, location=newcastle, limit=5)
+            keywords = source._name_keywords(niche)
+            assert all(k not in GENERIC_NAME_WORDS for k in keywords), niche.key
+            assert all(len(k) >= 4 for k in keywords), niche.key
+            assert len(keywords) <= 6, niche.key
+            overpass = source._build_query(query, 25000)
+            for banned in ("flat", "emergency", "new", "commercial"):
+                assert f'"name"~"{banned}"' not in overpass, f"{niche.key} -> {banned}"
+
+    def test_derived_keywords_drop_generic_words_for_custom_niches(self, settings, newcastle):
+        """A niche with no curated list still cannot produce a generic regex."""
+        from lead_pipeline.config import NicheRule
+
+        rule = NicheRule.from_dict(
+            "custom",
+            {
+                "label": "Custom trade",
+                "search_terms": ["flat roofing specialist", "emergency plumbing service"],
+                "service_keywords": ["commercial installation", "plumbing repairs"],
+            },
+        )
+        keywords = OpenStreetMapSource(settings)._name_keywords(rule)
+        assert "flat" not in keywords and "emergency" not in keywords
+        assert "commercial" not in keywords and "installation" not in keywords
+        assert "roofing" in keywords or "plumbing" in keywords
+
+    def test_tags_only_fallback_drops_name_clauses(self, settings, registry, newcastle):
+        source = OpenStreetMapSource(settings)
+        query = SearchQuery(niche=registry.get("roofers"), location=newcastle, limit=5)
+        fallback = source._build_query(query, 25000, tags_only=True)
+        assert '"name"~' not in fallback
+        assert 'craft"="roofer' in fallback
+
+    @pytest.mark.asyncio
+    async def test_refused_query_retries_with_tag_filters_only(
+        self, settings, ctx, registry, newcastle
+    ):
+        """Overpass 406s an over-expensive query; the retry must still return data."""
+        payload = {
+            "elements": [
+                {
+                    "type": "node", "id": 7, "lat": 54.9714, "lon": -1.6132,
+                    "tags": {"name": "Northern Roofing Solutions", "craft": "roofer"},
+                }
+            ]
+        }
+        calls: list[str] = []
+
+        def handler(request):
+            body = request.data or ""
+            calls.append(body)
+            if '"name"~' in body or "%22name%22" in body:
+                return Response(url=request.url, status=406,
+                                text="Error: query too expensive", final_url=request.url)
+            return Response(url=request.url, status=200, text=json.dumps(payload),
+                            final_url=request.url, headers={"content-type": "application/json"})
+
+        ctx.client = make_client(FakeTransport(default=handler))
+        query = SearchQuery(niche=registry.get("roofers"), location=newcastle, limit=5)
+        records = await collect(OpenStreetMapSource(settings), query, ctx)
+
+        assert len(calls) == 2, "should retry once with the cheaper query"
+        assert len(records) == 1
+        assert records[0].data["company_name"] == "Northern Roofing Solutions"
+
+    @pytest.mark.asyncio
+    async def test_query_is_posted_as_urlencoded_form_body(self, settings, ctx, registry, newcastle):
+        transport = FakeTransport(
+            default={"status": 200, "text": '{"elements":[]}',
+                     "headers": {"content-type": "application/json"}}
+        )
+        ctx.client = make_client(transport)
+        query = SearchQuery(niche=registry.get("roofers"), location=newcastle, limit=5)
+        await collect(OpenStreetMapSource(settings), query, ctx)
+        request = transport.requests[0]
+        assert isinstance(request.data, str) and request.data.startswith("data=")
+        assert request.headers["Content-Type"].startswith("application/x-www-form-urlencoded")
 
 
 # ---------------------------------------------------------------------------

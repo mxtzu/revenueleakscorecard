@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Mapping, Protocol
@@ -87,6 +88,21 @@ class Response:
             return _json.loads(self.text)
         except ValueError as exc:
             raise HttpError(f"Invalid JSON from {self.url}: {exc}", url=self.url, kind="invalid_json") from exc
+
+
+def _status_message(url: str, response: "Response", limit: int = 400) -> str:
+    """HTTP status plus the server's own explanation.
+
+    APIs almost always say why they refused; without this the caller only sees
+    a bare status code and has nothing to act on.
+    """
+    body = re.sub(r"<[^>]+>", " ", response.text or "")
+    body = re.sub(r"\s+", " ", body).strip()
+    if not body:
+        return f"HTTP {response.status} from {url}"
+    if len(body) > limit:
+        body = body[:limit] + "…"
+    return f"HTTP {response.status} from {url}: {body}"
 
 
 class Transport(Protocol):
@@ -394,7 +410,7 @@ class HttpClient:
         response = await self.get(url, **kwargs)
         if not response.ok:
             raise HttpError(
-                response.error or f"HTTP {response.status} from {url}",
+                response.error or _status_message(url, response),
                 url=url,
                 kind=response.error_kind or "http_status",
                 status=response.status,
@@ -405,7 +421,7 @@ class HttpClient:
         response = await self.post(url, **kwargs)
         if not response.ok:
             raise HttpError(
-                response.error or f"HTTP {response.status} from {url}",
+                response.error or _status_message(url, response),
                 url=url,
                 kind=response.error_kind or "http_status",
                 status=response.status,

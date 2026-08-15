@@ -143,6 +143,40 @@ class TestApiFailures:
         assert exc_info.value.status == 403
 
     @pytest.mark.asyncio
+    async def test_error_includes_the_server_explanation(self):
+        """A bare status code is not actionable - keep what the API said."""
+        transport = FakeTransport(
+            default={"status": 406, "text": "Error: query is too expensive, reduce the area"}
+        )
+        client = build_client(transport, max_retries=1)
+        with pytest.raises(HttpError) as exc_info:
+            await client.post_json("https://overpass-api.de/api/interpreter", data="data=x")
+        message = str(exc_info.value)
+        assert "406" in message
+        assert "too expensive" in message
+
+    @pytest.mark.asyncio
+    async def test_error_body_is_stripped_of_markup_and_truncated(self):
+        transport = FakeTransport(
+            default={"status": 400, "text": "<html><body><p>" + "bad " * 400 + "</p></body></html>"}
+        )
+        client = build_client(transport, max_retries=1)
+        with pytest.raises(HttpError) as exc_info:
+            await client.get_json("https://api.test/thing")
+        message = str(exc_info.value)
+        assert "<html>" not in message and "<p>" not in message
+        assert len(message) < 600
+        assert message.endswith("…")
+
+    @pytest.mark.asyncio
+    async def test_empty_error_body_falls_back_to_status(self):
+        transport = FakeTransport(default={"status": 500, "text": ""})
+        client = build_client(transport, max_retries=1)
+        with pytest.raises(HttpError) as exc_info:
+            await client.get_json("https://api.test/thing")
+        assert str(exc_info.value) == "HTTP 500 from https://api.test/thing"
+
+    @pytest.mark.asyncio
     async def test_invalid_json_raises_httperror(self):
         transport = FakeTransport(default={"status": 200, "text": "<html>not json</html>"})
         client = build_client(transport)

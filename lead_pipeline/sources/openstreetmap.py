@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 from typing import Any, AsyncIterator
+from urllib.parse import urlencode
 
 from ..models import SourceRecord
 from ..utils.geo import within_radius
@@ -22,6 +23,26 @@ from .base import BaseSource, SearchQuery, SourceContext
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 OVERPASS_HOST = "overpass-api.de"
+OVERPASS_TIMEOUT = 60          # seconds, declared inside the query itself
+MAX_ELEMENTS = 400             # cap on returned elements
+MAX_NAME_CLAUSES = 6           # cap on name-regex clauses per query
+
+# Words too common in place names to use as a name regex: matching them across
+# a whole city returns thousands of irrelevant elements and Overpass rejects
+# the query as too expensive.
+GENERIC_NAME_WORDS = {
+    "flat", "flats", "house", "home", "homes", "building", "buildings", "centre",
+    "center", "court", "lodge", "manor", "farm", "hall", "park", "green", "grove",
+    "close", "road", "street", "lane", "avenue", "drive", "view", "hill", "wood",
+    "north", "south", "east", "west", "upper", "lower", "great", "little", "old",
+    "newer", "emergency", "commercial", "industrial", "local", "quality", "best",
+    "first", "national", "international", "british", "english", "royal", "city",
+    "town", "village", "works", "yard", "unit", "units", "shop", "store", "group",
+    "services", "service", "company", "limited", "solutions", "systems", "design",
+    "designs", "installation", "installations", "repair", "repairs", "specialist",
+    "specialists", "treatment", "treatments", "consultation", "packages", "package",
+    "installer", "installers", "provider", "providers", "practice", "surgery",
+}
 
 _TAG_FILTER_RE = re.compile(r'\["([a-zA-Z:_]+)"\s*=\s*"([^"]+)"\]')
 
@@ -56,25 +77,20 @@ class OpenStreetMapSource(BaseSource):
         ctx.client.limiter.set_host_rate(OVERPASS_HOST, self.default_rate_per_second or 0.5)
 
         radius_m = int(min(50_000, max(1_000, query.radius_km * 1000)))
-        overpass_query = self._build_query(query, radius_m)
         accepted_tags = self._accepted_tags(query)
 
-        try:
-            payload = await ctx.client.post_json(
-                OVERPASS_URL,
-                data={"data": overpass_query},
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-                check_robots=False,  # documented public API endpoint
-                cache_ttl=self.settings.cache_ttl_seconds,
-                timeout=90.0,
-                label="overpass",
+        payload = await self._run_query(self._build_query(query, radius_m), location, ctx)
+        if payload is None:
+            # Overpass refuses queries it predicts will be too expensive. Retry
+            # once with tag filters only - narrower, but far cheaper than the
+            # name-regex clauses.
+            self.logger.info(
+                "Retrying Overpass with tag filters only", extra={"location": location.label}
             )
-        except HttpError as exc:
-            ctx.record_error(stage="discovery", source=self.name, target=location.label, error=exc,
-                             error_type=exc.kind)
-            self.logger.warning(
-                "Overpass query failed", extra={"location": location.label, "error": str(exc)}
+            payload = await self._run_query(
+                self._build_query(query, radius_m, tags_only=True), location, ctx
             )
+        if payload is None:
             return
 
         elements = (payload or {}).get("elements") or []
@@ -94,7 +110,35 @@ class OpenStreetMapSource(BaseSource):
             yield record
 
     # ------------------------------------------------------------------
-    def _build_query(self, query: SearchQuery, radius_m: int) -> str:
+    async def _run_query(self, overpass_query: str, location: Any, ctx: SourceContext) -> Any:
+        """POST one Overpass query. Returns ``None`` on failure (already recorded)."""
+        try:
+            return await ctx.client.post_json(
+                OVERPASS_URL,
+                # Canonical form: urlencoded "data=<query>" as a raw string body,
+                # so no form-encoding layer can reinterpret it.
+                data=urlencode({"data": overpass_query}),
+                headers={"Content-Type": "application/x-www-form-urlencoded; charset=utf-8"},
+                check_robots=False,  # documented public API endpoint
+                cache_ttl=self.settings.cache_ttl_seconds,
+                timeout=OVERPASS_TIMEOUT + 30,
+                label="overpass",
+            )
+        except HttpError as exc:
+            ctx.record_error(stage="discovery", source=self.name, target=str(location.label),
+                             error=exc, error_type=exc.kind)
+            self.logger.warning(
+                "Overpass query failed",
+                extra={"location": location.label, "error": str(exc), "query": overpass_query[:400]},
+            )
+            return None
+
+    def _build_query(self, query: SearchQuery, radius_m: int, *, tags_only: bool = False) -> str:
+        """Build the Overpass QL union.
+
+        ``out`` parameter order is fixed by the grammar: verbosity, then
+        geometry, then sort order, then limit - ``out tags center 400``.
+        """
         lat, lon = query.location.latitude, query.location.longitude
         around = f"(around:{radius_m},{lat},{lon})"
         clauses: list[str] = []
@@ -105,32 +149,41 @@ class OpenStreetMapSource(BaseSource):
                 continue
             clauses.append(f"{clause}{around};")
 
-        for keyword in self._name_keywords(query.niche):
-            escaped = re.sub(r'[^a-z0-9 ]', "", keyword.lower()).strip()
-            if not escaped:
-                continue
-            clauses.append(f'nwr["name"~"{escaped}",i]{around};')
+        if not tags_only:
+            for keyword in self._name_keywords(query.niche):
+                clauses.append(f'nwr["name"~"{keyword}",i]{around};')
 
         if not clauses:
             clauses.append(f'nwr["shop"]{around};')
 
         body = "\n  ".join(clauses)
-        return f"[out:json][timeout:60];\n(\n  {body}\n);\nout center tags 400;"
+        return f"[out:json][timeout:{OVERPASS_TIMEOUT}];\n(\n  {body}\n);\nout tags center {MAX_ELEMENTS};"
 
     def _name_keywords(self, niche: Any) -> list[str]:
-        keywords: list[str] = []
-        for term in niche.search_terms[:6]:
-            head = term.split()[0]
-            if len(head) >= 4:
-                keywords.append(head)
-        for keyword in niche.service_keywords[:6]:
-            head = keyword.split()[0]
-            if len(head) >= 5:
-                keywords.append(head)
+        """Distinctive words to match against POI names.
+
+        A name regex runs over every named element in the radius, so a generic
+        word ("flat", "new", "home") matches thousands of unrelated features and
+        Overpass refuses the query as too expensive. Curated
+        ``osm_name_keywords`` in the niche config are used when present;
+        otherwise words are derived conservatively and generic ones dropped.
+        """
+        curated = [str(k).lower() for k in getattr(niche, "osm_name_keywords", [])]
+        if curated:
+            candidates = curated
+        else:
+            candidates = []
+            for term in list(niche.search_terms)[:6] + list(niche.service_keywords)[:6]:
+                for word in str(term).lower().split():
+                    if len(word) >= 5 and word not in GENERIC_NAME_WORDS:
+                        candidates.append(word)
+
         seen: dict[str, None] = {}
-        for keyword in keywords:
-            seen.setdefault(keyword.lower(), None)
-        return list(seen)[:8]
+        for keyword in candidates:
+            cleaned = re.sub(r"[^a-z0-9]", "", keyword.lower())
+            if len(cleaned) >= 4 and cleaned not in GENERIC_NAME_WORDS:
+                seen.setdefault(cleaned, None)
+        return list(seen)[:MAX_NAME_CLAUSES]
 
     def _accepted_tags(self, query: SearchQuery) -> set[tuple[str, str]]:
         accepted: set[tuple[str, str]] = set()

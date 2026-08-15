@@ -278,6 +278,10 @@ class NicheRule:
     search_terms: list[str] = field(default_factory=list)
     google_place_types: list[str] = field(default_factory=list)
     osm_filters: list[str] = field(default_factory=list)
+    #: Distinctive words matched against OSM POI names. Keep these
+    #: business-identifying - a generic word makes the Overpass query too
+    #: expensive and the server refuses it.
+    osm_name_keywords: list[str] = field(default_factory=list)
     ticket_value: int = 5  # 1-10, typical customer value
     search_demand: int = 5  # 1-10, paid search intent volume
     competition: int = 5  # 1-10, local auction competitiveness
@@ -303,6 +307,7 @@ class NicheRule:
             search_terms=[str(v) for v in data.get("search_terms", [])],
             google_place_types=lower_list("google_place_types"),
             osm_filters=[str(v) for v in data.get("osm_filters", [])],
+            osm_name_keywords=lower_list("osm_name_keywords"),
             ticket_value=int(data.get("ticket_value", 5)),
             search_demand=int(data.get("search_demand", 5)),
             competition=int(data.get("competition", 5)),
