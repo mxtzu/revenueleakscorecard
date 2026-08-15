@@ -26,6 +26,7 @@ OVERPASS_HOST = "overpass-api.de"
 OVERPASS_TIMEOUT = 60          # seconds, declared inside the query itself
 MAX_ELEMENTS = 400             # cap on returned elements
 MAX_NAME_CLAUSES = 6           # cap on name-regex clauses per query
+NAME_REGEX_MAX_RADIUS_KM = 25  # beyond this, name regexes time the query out
 
 # Statuses meaning "we refused your request", not "we refused your query".
 # Re-sending a cheaper query changes nothing.
@@ -160,6 +161,22 @@ class OpenStreetMapSource(BaseSource):
                 timeout=OVERPASS_TIMEOUT + 30,
                 label="overpass",
             )
+            # Overpass reports runtime failures - query timeout, out of memory -
+            # as HTTP 200 with an empty element list and a "remark". Without
+            # this check a timed-out query is indistinguishable from "no
+            # businesses here", which is a much more damaging lie.
+            remark = (payload or {}).get("remark")
+            if remark:
+                ctx.record_error(
+                    stage="discovery", source=self.name, target=str(location.label),
+                    error=str(remark), error_type="overpass_runtime_error",
+                )
+                self.logger.warning(
+                    "Overpass accepted the query but could not complete it: %s" % remark,
+                    extra={"location": location.label, "elements": len((payload or {}).get("elements") or [])},
+                )
+                # HTTP was fine, so the caller is free to retry something cheaper.
+                return (None, 200)
             return (payload, None)
         except HttpError as exc:
             ctx.record_error(stage="discovery", source=self.name, target=str(location.label),
@@ -199,7 +216,12 @@ class OpenStreetMapSource(BaseSource):
                 continue
             clauses.append(f"{clause}{around};")
 
-        if not tags_only:
+        # A name regex is evaluated against every named element in the search
+        # area, so its cost grows with the radius. Past a threshold it reliably
+        # blows the query timeout and Overpass returns nothing at all - worse
+        # than the extra recall it buys. Tag filters stay cheap at any radius.
+        wide_area = radius_m > NAME_REGEX_MAX_RADIUS_KM * 1000
+        if not tags_only and not wide_area:
             for keyword in self._name_keywords(query.niche):
                 clauses.append(f'nwr["name"~"{keyword}",i]{around};')
 

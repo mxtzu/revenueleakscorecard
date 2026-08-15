@@ -329,12 +329,77 @@ class TestOpenStreetMap:
                             final_url=request.url, headers={"content-type": "application/json"})
 
         ctx.client = make_client(FakeTransport(default=handler))
+        newcastle.radius_km = 20  # keep name clauses in play
         query = SearchQuery(niche=registry.get("roofers"), location=newcastle, limit=5)
         records = await collect(OpenStreetMapSource(settings), query, ctx)
 
         assert len(calls) == 2, "should retry once with the cheaper query"
         assert len(records) == 1
         assert records[0].data["company_name"] == "Northern Roofing Solutions"
+
+    @pytest.mark.asyncio
+    async def test_timeout_remark_is_not_mistaken_for_no_results(
+        self, settings, ctx, registry, newcastle
+    ):
+        """Overpass reports a timed-out query as HTTP 200 + empty + remark.
+
+        Treating that as "no businesses here" is the most damaging possible
+        misreading, so it must be surfaced as a failure and retried.
+        """
+        timed_out = {
+            "version": 0.6,
+            "elements": [],
+            "remark": 'runtime error: Query timed out in "query" at line 3 after 60 seconds.',
+        }
+        good = {"elements": [
+            {"type": "node", "id": 9, "lat": 54.9714, "lon": -1.6132,
+             "tags": {"amenity": "dentist", "name": "Grey Street Dental"}},
+        ]}
+        calls: list[str] = []
+
+        def handler(request):
+            body = request.data or ""
+            calls.append(body)
+            payload = timed_out if ('"name"~' in body or "%22name%22" in body) else good
+            return Response(url=request.url, status=200, text=json.dumps(payload),
+                            final_url=request.url, headers={"content-type": "application/json"})
+
+        ctx.client = make_client(FakeTransport(default=handler))
+        newcastle.radius_km = 20  # keep name clauses in play
+        query = SearchQuery(niche=registry.get("cosmetic_dentists"), location=newcastle, limit=10)
+        records = await collect(OpenStreetMapSource(settings), query, ctx)
+
+        assert len(calls) == 2, "a timed-out query must trigger the cheaper retry"
+        assert len(records) == 1
+        assert records[0].data["company_name"] == "Grey Street Dental"
+        assert any(e.error_type == "overpass_runtime_error" for e in ctx.errors)
+
+    @pytest.mark.asyncio
+    async def test_remark_is_reported_verbatim(self, settings, ctx, registry, newcastle, caplog):
+        payload = {"elements": [], "remark": "runtime error: Query run out of memory"}
+        ctx.client = make_client(FakeTransport(
+            default={"status": 200, "text": json.dumps(payload),
+                     "headers": {"content-type": "application/json"}}))
+        query = SearchQuery(niche=registry.get("cosmetic_dentists"), location=newcastle, limit=10)
+        with caplog.at_level("WARNING"):
+            await collect(OpenStreetMapSource(settings), query, ctx)
+        assert "run out of memory" in " ".join(r.getMessage() for r in caplog.records)
+
+    def test_wide_radius_drops_name_regexes(self, settings, registry, newcastle):
+        """Name regexes over a 50 km radius reliably blow the query timeout."""
+        source = OpenStreetMapSource(settings)
+        newcastle.radius_km = 50
+        wide = source._build_query(
+            SearchQuery(niche=registry.get("cosmetic_dentists"), location=newcastle, limit=50), 50000
+        )
+        assert '"name"~' not in wide
+        assert 'amenity"="dentist' in wide
+
+        newcastle.radius_km = 20
+        narrow = source._build_query(
+            SearchQuery(niche=registry.get("cosmetic_dentists"), location=newcastle, limit=50), 20000
+        )
+        assert '"name"~' in narrow
 
     @pytest.mark.asyncio
     async def test_rejected_request_is_not_retried(self, settings, ctx, registry, newcastle):
