@@ -24,6 +24,21 @@ logger = get_logger("http")
 
 RETRY_STATUSES = {408, 425, 429, 500, 502, 503, 504, 522, 524}
 
+# Browser-like headers help when fetching a business website (some sites vary
+# their markup on them). They are wrong on an API endpoint: a server doing
+# Apache-style content negotiation can reject the request outright with
+# "406 Not Acceptable - an appropriate representation could not be found",
+# before the application ever sees the query. API calls therefore send the
+# minimal set that every working API client sends.
+WEB_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-GB,en;q=0.9",
+}
+API_HEADERS = {
+    "Accept": "*/*",
+}
+DEFAULT_HEADERS = {"web": WEB_HEADERS, "api": API_HEADERS}
+
 
 class HttpError(Exception):
     """Raised for a transport-level failure after retries are exhausted."""
@@ -407,6 +422,7 @@ class HttpClient:
         return await self.request("POST", url, **kwargs)
 
     async def get_json(self, url: str, **kwargs: Any) -> Any:
+        kwargs.setdefault("headers_profile", "api")
         response = await self.get(url, **kwargs)
         if not response.ok:
             raise HttpError(
@@ -418,6 +434,7 @@ class HttpClient:
         return response.json()
 
     async def post_json(self, url: str, **kwargs: Any) -> Any:
+        kwargs.setdefault("headers_profile", "api")
         response = await self.post(url, **kwargs)
         if not response.ok:
             raise HttpError(
@@ -444,6 +461,7 @@ class HttpClient:
         check_robots: bool = True,
         allow_redirects: bool = True,
         label: str | None = None,
+        headers_profile: str = "web",
     ) -> Response:
         """Perform a request with rate limiting, caching, retries and backoff.
 
@@ -480,11 +498,8 @@ class HttpClient:
                     from_cache=True,
                 )
 
-        request_headers = {
-            "User-Agent": self.user_agent,
-            "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-GB,en;q=0.9",
-        }
+        request_headers = dict(DEFAULT_HEADERS.get(headers_profile, WEB_HEADERS))
+        request_headers["User-Agent"] = self.user_agent
         request_headers.update({k: v for k, v in (headers or {}).items()})
 
         request = Request(

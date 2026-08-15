@@ -118,6 +118,9 @@ class Settings:
     meta_ad_library_token: str | None = None
     pagespeed_api_key: str | None = None
 
+    # --- endpoints (switchable to a mirror without touching code) ---
+    overpass_url: str = "https://overpass-api.de/api/interpreter"
+
     # --- identification / politeness ---
     user_agent: str = (
         "LeadPipeline/1.0 (+https://example.com/lead-pipeline; B2B lead research; contact: set CONTACT_EMAIL)"
@@ -195,6 +198,8 @@ class Settings:
             companies_house_api_key=_env("COMPANIES_HOUSE_API_KEY"),
             meta_ad_library_token=_env("META_AD_LIBRARY_TOKEN"),
             pagespeed_api_key=_env("PAGESPEED_API_KEY"),
+            overpass_url=_env("OVERPASS_URL", "https://overpass-api.de/api/interpreter")
+            or "https://overpass-api.de/api/interpreter",
             user_agent=user_agent,
             contact_email=contact_email,
             respect_robots=_env_bool("RESPECT_ROBOTS", True),

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 from typing import Any, AsyncIterator
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from ..models import SourceRecord
 from ..utils.geo import within_radius
@@ -74,7 +74,8 @@ class OpenStreetMapSource(BaseSource):
             )
             return
 
-        ctx.client.limiter.set_host_rate(OVERPASS_HOST, self.default_rate_per_second or 0.5)
+        # Rate-limit whichever endpoint is configured, not just the default host.
+        ctx.client.limiter.set_host_rate(self._endpoint_host(), self.default_rate_per_second or 0.5)
 
         radius_m = int(min(50_000, max(1_000, query.radius_km * 1000)))
         accepted_tags = self._accepted_tags(query)
@@ -110,11 +111,17 @@ class OpenStreetMapSource(BaseSource):
             yield record
 
     # ------------------------------------------------------------------
+    def _endpoint(self) -> str:
+        return getattr(self.settings, "overpass_url", None) or OVERPASS_URL
+
+    def _endpoint_host(self) -> str:
+        return urlsplit(self._endpoint()).hostname or OVERPASS_HOST
+
     async def _run_query(self, overpass_query: str, location: Any, ctx: SourceContext) -> Any:
         """POST one Overpass query. Returns ``None`` on failure (already recorded)."""
         try:
             return await ctx.client.post_json(
-                OVERPASS_URL,
+                self._endpoint(),
                 # Canonical form: urlencoded "data=<query>" as a raw string body,
                 # so no form-encoding layer can reinterpret it.
                 data=urlencode({"data": overpass_query}),

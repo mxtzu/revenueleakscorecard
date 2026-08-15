@@ -346,6 +346,39 @@ class TestHeaders:
         assert transport.requests[0].headers["User-Agent"] == "LeadPipelineTest/1.0"
 
     @pytest.mark.asyncio
+    async def test_api_calls_send_minimal_headers(self):
+        """Browser-style Accept/Accept-Language make content-negotiating API
+        servers reject the request with 406; API calls send what curl sends."""
+        transport = FakeTransport(
+            default={"status": 200, "text": "{}", "headers": {"content-type": "application/json"}}
+        )
+        client = build_client(transport)
+        await client.post_json("https://overpass-api.de/api/interpreter", data="data=x")
+        headers = transport.requests[0].headers
+        assert headers["Accept"] == "*/*"
+        assert "Accept-Language" not in headers
+        assert headers["User-Agent"] == "LeadPipelineTest/1.0"
+
+    @pytest.mark.asyncio
+    async def test_website_fetches_keep_browser_headers(self):
+        transport = FakeTransport(default={"status": 200, "text": "<html>ok</html>"})
+        client = build_client(transport)
+        await client.get("https://somebusiness.co.uk/")
+        headers = transport.requests[0].headers
+        assert "text/html" in headers["Accept"]
+        assert headers["Accept-Language"].startswith("en-GB")
+
+    @pytest.mark.asyncio
+    async def test_caller_can_still_override_the_api_accept_header(self):
+        transport = FakeTransport(
+            default={"status": 200, "text": "{}", "headers": {"content-type": "application/json"}}
+        )
+        client = build_client(transport)
+        await client.get_json("https://api.search.brave.com/res/v1/web/search",
+                              headers={"Accept": "application/json"})
+        assert transport.requests[0].headers["Accept"] == "application/json"
+
+    @pytest.mark.asyncio
     async def test_custom_headers_merge(self):
         transport = FakeTransport(default={"status": 200, "text": "ok"})
         client = build_client(transport)
