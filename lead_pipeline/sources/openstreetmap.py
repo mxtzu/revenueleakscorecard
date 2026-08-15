@@ -23,7 +23,7 @@ from .base import BaseSource, SearchQuery, SourceContext
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 OVERPASS_HOST = "overpass-api.de"
-OVERPASS_TIMEOUT = 60          # seconds, declared inside the query itself
+OVERPASS_TIMEOUT = 60          # default execution budget declared in the query
 MAX_ELEMENTS = 400             # cap on returned elements
 MAX_NAME_CLAUSES = 6           # cap on name-regex clauses per query
 NAME_REGEX_MAX_RADIUS_KM = 25  # beyond this, name regexes time the query out
@@ -141,6 +141,14 @@ class OpenStreetMapSource(BaseSource):
     def _endpoint_host(self) -> str:
         return urlsplit(self._endpoint()).hostname or OVERPASS_HOST
 
+    def _query_timeout(self) -> int:
+        return int(getattr(self.settings, "overpass_query_timeout", None) or OVERPASS_TIMEOUT)
+
+    def _http_timeout(self) -> float:
+        """Wall-clock budget: queue time plus execution time."""
+        configured = getattr(self.settings, "overpass_http_timeout", None)
+        return float(configured or (self._query_timeout() + 120))
+
     async def _run_query(
         self, overpass_query: str, location: Any, ctx: SourceContext
     ) -> tuple[Any, int | None]:
@@ -159,7 +167,7 @@ class OpenStreetMapSource(BaseSource):
                 headers={"Content-Type": "application/x-www-form-urlencoded; charset=utf-8"},
                 check_robots=False,  # documented public API endpoint
                 cache_ttl=self.settings.cache_ttl_seconds,
-                timeout=OVERPASS_TIMEOUT + 30,
+                timeout=self._http_timeout(),
                 label="overpass",
             )
             # Overpass reports runtime failures - query timeout, out of memory -
@@ -230,7 +238,10 @@ class OpenStreetMapSource(BaseSource):
             clauses.append(f'nwr["shop"]{around};')
 
         body = "\n  ".join(clauses)
-        return f"[out:json][timeout:{OVERPASS_TIMEOUT}];\n(\n  {body}\n);\nout tags center {MAX_ELEMENTS};"
+        return (
+            f"[out:json][timeout:{self._query_timeout()}];\n(\n  {body}\n);\n"
+            f"out tags center {MAX_ELEMENTS};"
+        )
 
     def _name_keywords(self, niche: Any) -> list[str]:
         """Distinctive words to match against POI names.

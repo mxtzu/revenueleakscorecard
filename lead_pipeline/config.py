@@ -120,6 +120,13 @@ class Settings:
 
     # --- endpoints (switchable to a mirror without touching code) ---
     overpass_url: str = "https://overpass-api.de/api/interpreter"
+    #: Execution budget declared inside the Overpass query.
+    overpass_query_timeout: int = 60
+    #: How long to wait for a response. Overpass queues requests when all
+    #: execution slots are busy, and that queue time is on top of the
+    #: execution budget - so this must be generously larger, or every
+    #: request during a busy period is abandoned before it ever runs.
+    overpass_http_timeout: int = 180
 
     # --- identification / politeness ---
     # Short and conventional. Long parenthetical agents - especially ones
@@ -202,6 +209,8 @@ class Settings:
             pagespeed_api_key=_env("PAGESPEED_API_KEY"),
             overpass_url=_env("OVERPASS_URL", "https://overpass-api.de/api/interpreter")
             or "https://overpass-api.de/api/interpreter",
+            overpass_query_timeout=_env_int("OVERPASS_QUERY_TIMEOUT", 60),
+            overpass_http_timeout=_env_int("OVERPASS_HTTP_TIMEOUT", 180),
             user_agent=user_agent,
             contact_email=contact_email,
             respect_robots=_env_bool("RESPECT_ROBOTS", True),
