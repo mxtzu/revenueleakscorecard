@@ -672,6 +672,27 @@ credential. Run `python pipeline.py --list-sources`. With no keys at all, use
 source needs coordinates. Check that geocoding worked (`--log-level DEBUG`),
 widen `--radius`, or add tag filters to the niche's `osm_filters`.
 
+**Overpass returns 403 or 406** — the endpoint rejected the *request*, not the
+query (an Apache "an appropriate representation could not be found" page). It
+is almost always the User-Agent: `overpass-api.de` refuses long agent strings
+carrying a URL. Set a short one in `.env`:
+
+```
+USER_AGENT=MyTool/1.0 (you@youragency.co.uk)
+```
+
+Confirm which side is at fault by sending the same query with curl's default
+agent — if that succeeds, it's your agent string:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST https://overpass-api.de/api/interpreter \
+  --data 'data=[out:json];node[amenity=dentist](around:2000,54.9783,-1.6178);out 3;'
+```
+
+**Overpass returns 504** — the public instance is overloaded, which is common.
+Retry, or switch to a mirror in `.env`:
+`OVERPASS_URL=https://overpass.kumi.systems/api/interpreter`
+
 **Geocoding fails / Nominatim errors** — set `CONTACT_EMAIL`; Nominatim rejects
 unidentified clients and allows only 1 req/s. Or pass coordinates directly:
 `--location "54.9783,-1.6178"`.

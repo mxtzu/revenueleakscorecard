@@ -305,10 +305,10 @@ class TestOpenStreetMap:
         assert 'craft"="roofer' in fallback
 
     @pytest.mark.asyncio
-    async def test_refused_query_retries_with_tag_filters_only(
+    async def test_over_expensive_query_retries_with_tag_filters_only(
         self, settings, ctx, registry, newcastle
     ):
-        """Overpass 406s an over-expensive query; the retry must still return data."""
+        """A 400 rejects the *query*; the cheaper retry must still return data."""
         payload = {
             "elements": [
                 {
@@ -323,7 +323,7 @@ class TestOpenStreetMap:
             body = request.data or ""
             calls.append(body)
             if '"name"~' in body or "%22name%22" in body:
-                return Response(url=request.url, status=406,
+                return Response(url=request.url, status=400,
                                 text="Error: query too expensive", final_url=request.url)
             return Response(url=request.url, status=200, text=json.dumps(payload),
                             final_url=request.url, headers={"content-type": "application/json"})
@@ -335,6 +335,35 @@ class TestOpenStreetMap:
         assert len(calls) == 2, "should retry once with the cheaper query"
         assert len(records) == 1
         assert records[0].data["company_name"] == "Northern Roofing Solutions"
+
+    @pytest.mark.asyncio
+    async def test_rejected_request_is_not_retried(self, settings, ctx, registry, newcastle):
+        """A 406 refuses the *request*; re-sending a cheaper query is wasted."""
+        transport = FakeTransport(default={"status": 406, "text": "406 Not Acceptable"})
+        ctx.client = make_client(transport)
+        query = SearchQuery(niche=registry.get("roofers"), location=newcastle, limit=5)
+        records = await collect(OpenStreetMapSource(settings), query, ctx)
+        assert records == []
+        assert len(transport.requests) == 1, "must not retry a rejected request"
+
+    @pytest.mark.asyncio
+    async def test_rejected_request_explains_the_fix(self, settings, ctx, registry, newcastle, caplog):
+        transport = FakeTransport(default={"status": 406, "text": "406 Not Acceptable"})
+        ctx.client = make_client(transport)
+        query = SearchQuery(niche=registry.get("roofers"), location=newcastle, limit=5)
+        with caplog.at_level("WARNING"):
+            await collect(OpenStreetMapSource(settings), query, ctx)
+        logged = " ".join(record.getMessage() for record in caplog.records)
+        assert "User-Agent" in logged
+        assert "OVERPASS_URL" in logged
+
+    def test_default_user_agent_is_short_and_has_no_url(self):
+        """A long agent carrying a URL gets the request refused by Overpass."""
+        from lead_pipeline.config import Settings as S
+
+        assert "http" not in S().user_agent
+        assert "example.com" not in S().user_agent
+        assert len(S().user_agent) < 60
 
     @pytest.mark.asyncio
     async def test_query_is_posted_as_urlencoded_form_body(self, settings, ctx, registry, newcastle):

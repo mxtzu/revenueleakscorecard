@@ -27,6 +27,10 @@ OVERPASS_TIMEOUT = 60          # seconds, declared inside the query itself
 MAX_ELEMENTS = 400             # cap on returned elements
 MAX_NAME_CLAUSES = 6           # cap on name-regex clauses per query
 
+# Statuses meaning "we refused your request", not "we refused your query".
+# Re-sending a cheaper query changes nothing.
+REQUEST_REJECTED_STATUSES = {401, 403, 406, 429}
+
 # Words too common in place names to use as a name regex: matching them across
 # a whole city returns thousands of irrelevant elements and Overpass rejects
 # the query as too expensive.
@@ -80,15 +84,16 @@ class OpenStreetMapSource(BaseSource):
         radius_m = int(min(50_000, max(1_000, query.radius_km * 1000)))
         accepted_tags = self._accepted_tags(query)
 
-        payload = await self._run_query(self._build_query(query, radius_m), location, ctx)
-        if payload is None:
+        payload, status = await self._run_query(self._build_query(query, radius_m), location, ctx)
+        if payload is None and status not in REQUEST_REJECTED_STATUSES:
             # Overpass refuses queries it predicts will be too expensive. Retry
             # once with tag filters only - narrower, but far cheaper than the
-            # name-regex clauses.
+            # name-regex clauses. Pointless when the request itself was
+            # rejected: the cheaper query would be refused identically.
             self.logger.info(
                 "Retrying Overpass with tag filters only", extra={"location": location.label}
             )
-            payload = await self._run_query(
+            payload, _ = await self._run_query(
                 self._build_query(query, radius_m, tags_only=True), location, ctx
             )
         if payload is None:
@@ -117,10 +122,17 @@ class OpenStreetMapSource(BaseSource):
     def _endpoint_host(self) -> str:
         return urlsplit(self._endpoint()).hostname or OVERPASS_HOST
 
-    async def _run_query(self, overpass_query: str, location: Any, ctx: SourceContext) -> Any:
-        """POST one Overpass query. Returns ``None`` on failure (already recorded)."""
+    async def _run_query(
+        self, overpass_query: str, location: Any, ctx: SourceContext
+    ) -> tuple[Any, int | None]:
+        """POST one Overpass query.
+
+        Returns ``(payload, None)`` on success and ``(None, status)`` on
+        failure - the status lets the caller tell a refused *request* from a
+        refused *query*.
+        """
         try:
-            return await ctx.client.post_json(
+            payload = await ctx.client.post_json(
                 self._endpoint(),
                 # Canonical form: urlencoded "data=<query>" as a raw string body,
                 # so no form-encoding layer can reinterpret it.
@@ -131,14 +143,28 @@ class OpenStreetMapSource(BaseSource):
                 timeout=OVERPASS_TIMEOUT + 30,
                 label="overpass",
             )
+            return (payload, None)
         except HttpError as exc:
             ctx.record_error(stage="discovery", source=self.name, target=str(location.label),
                              error=exc, error_type=exc.kind)
-            self.logger.warning(
-                "Overpass query failed",
-                extra={"location": location.label, "error": str(exc), "query": overpass_query[:400]},
-            )
-            return None
+            if exc.status in (403, 406):
+                # Overpass fronts its API with Apache; a rejected User-Agent is
+                # refused here with no useful explanation. Say what to do.
+                self.logger.warning(
+                    "Overpass rejected the request itself (not the query). This is almost always "
+                    "the User-Agent: set a short USER_AGENT in .env (e.g. 'MyTool/1.0 "
+                    "(you@example.co.uk)'), or point OVERPASS_URL at a mirror such as "
+                    "https://overpass.kumi.systems/api/interpreter",
+                    extra={"status": exc.status, "user_agent": ctx.client.user_agent,
+                           "endpoint": self._endpoint()},
+                )
+            else:
+                self.logger.warning(
+                    "Overpass query failed",
+                    extra={"location": location.label, "error": str(exc),
+                           "query": overpass_query[:400]},
+                )
+            return (None, exc.status)
 
     def _build_query(self, query: SearchQuery, radius_m: int, *, tags_only: bool = False) -> str:
         """Build the Overpass QL union.
