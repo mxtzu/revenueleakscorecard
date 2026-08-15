@@ -318,8 +318,15 @@ class Pipeline:
             self.db.upsert_location(location)
 
     # ------------------------------------------------------------ discovery
+    #: Consecutive failed queries before a source is dropped for the rest of
+    #: the run. A public API having a bad day should cost one or two slow
+    #: queries, not one per niche x location.
+    SOURCE_FAILURE_LIMIT = 3
+
     async def _discover(self, sources: Sequence[BaseSource]) -> list[Lead]:
         leads: list[Lead] = []
+        consecutive_failures: dict[str, int] = {}
+        exhausted: set[str] = set()
         for niche in self.config.niches:
             for location in self.config.locations:
                 if self._interrupted.is_set():
@@ -333,6 +340,9 @@ class Pipeline:
                 for source in sources:
                     if self._interrupted.is_set():
                         return leads
+                    if source.name in exhausted:
+                        continue
+                    errors_before = len(self.ctx.errors)
                     found = 0
                     try:
                         async for record in source.search(query, self.ctx):
@@ -363,6 +373,24 @@ class Pipeline:
                             "location": location.label, "found": found,
                         },
                     )
+
+                    # Give up on a source that keeps failing rather than paying
+                    # its timeout once per remaining niche x location.
+                    if found == 0 and len(self.ctx.errors) > errors_before:
+                        consecutive_failures[source.name] = (
+                            consecutive_failures.get(source.name, 0) + 1
+                        )
+                        if consecutive_failures[source.name] >= self.SOURCE_FAILURE_LIMIT:
+                            exhausted.add(source.name)
+                            note = (
+                                f"Source '{source.name}' failed "
+                                f"{consecutive_failures[source.name]} times in a row and was "
+                                f"skipped for the rest of this run"
+                            )
+                            self.stats.notes.append(note)
+                            logger.warning(note, extra={"source": source.name})
+                    else:
+                        consecutive_failures[source.name] = 0
         return leads
 
     # ----------------------------------------------------------- enrichment

@@ -375,3 +375,48 @@ class TestEndToEnd:
         assert roofer.website_analysis.mobile_friendly is False
         assert roofer.website_analysis.landing_page_quality_score < 30
         db.close()
+
+
+@pytest.mark.asyncio
+async def test_repeatedly_failing_source_is_dropped(settings, tmp_path):
+    """A public API having a bad day must not cost one timeout per niche."""
+    from lead_pipeline.sources.base import BaseSource, SourceContext
+    from lead_pipeline.utils.http import HttpError
+
+    attempts = {"n": 0}
+
+    class FlakySource(BaseSource):
+        name = "openstreetmap"          # reuse a registered name
+        kind = "discovery"
+        description = "always fails"
+        requires_credentials = ()
+
+        async def search(self, query, ctx: SourceContext):
+            attempts["n"] += 1
+            ctx.record_error(stage="discovery", source=self.name, target="x",
+                             error=HttpError("boom", url="http://x", kind="timeout"),
+                             error_type="timeout")
+            return
+            yield  # pragma: no cover
+
+    registry = load_niches()
+    location = parse_location("Sunderland", radius_km=20)
+    location.latitude, location.longitude, location.geocoded = 54.9069, -1.3838, True
+    config = PipelineConfig(
+        niches=registry.all(),                # all 10 niches
+        locations=[location],
+        source_names=["openstreetmap"],
+        min_score=0.0, formats=[], output_dir=tmp_path / "out",
+    )
+    db = Database(tmp_path / "flaky.sqlite")
+    pipeline = Pipeline(settings, config, database=db, transport=FakeTransport())
+    pipeline._sources = [FlakySource(settings)]
+
+    # Drive discovery directly so the source list is not rebuilt.
+    await pipeline._discover(pipeline._sources)
+
+    assert attempts["n"] == Pipeline.SOURCE_FAILURE_LIMIT, (
+        "should stop after the failure limit, not try all 10 niches"
+    )
+    assert any("skipped for the rest of this run" in n for n in pipeline.stats.notes)
+    db.close()
