@@ -122,9 +122,10 @@ class Settings:
     overpass_url: str = "https://overpass-api.de/api/interpreter"
 
     # --- identification / politeness ---
-    user_agent: str = (
-        "LeadPipeline/1.0 (+https://example.com/lead-pipeline; B2B lead research; contact: set CONTACT_EMAIL)"
-    )
+    # Short and conventional. Long parenthetical agents - especially ones
+    # carrying a URL - are a common trigger for WAF rules that reject the
+    # request outright. CONTACT_EMAIL is appended when set.
+    user_agent: str = "LeadPipeline/1.0"
     contact_email: str | None = None
     respect_robots: bool = True
 
@@ -172,10 +173,11 @@ class Settings:
             load_dotenv(env_file)
 
         contact_email = _env("CONTACT_EMAIL")
-        default_agent = cls.user_agent
-        user_agent = _env("USER_AGENT") or default_agent
-        if contact_email and "contact: set CONTACT_EMAIL" in user_agent:
-            user_agent = user_agent.replace("contact: set CONTACT_EMAIL", f"contact: {contact_email}")
+        user_agent = _env("USER_AGENT")
+        if not user_agent:
+            user_agent = cls.user_agent
+            if contact_email:
+                user_agent = f"{user_agent} ({contact_email})"
 
         host_overrides: dict[str, float] = {}
         raw_overrides = _env("HOST_RATE_OVERRIDES")
