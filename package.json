@@ -8,6 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "db:test": "bash supabase/tests/run.sh",
     "test:watch": "vitest",
     "sync:leads": "tsx scripts/sync-leads.ts"
   },

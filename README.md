@@ -88,7 +88,25 @@ cd lead_pipeline && pip install -r requirements.txt
 python pipeline.py --niche roofers --location "Sunderland" --radius 25
 ```
 
+## Agency CRM
+
+The CRM turns pipeline output into a sales process — stages, owners, activity history,
+opportunities, clients and payment records — at `/dashboard`, `/leads`, `/pipeline` and
+friends. It is built around the Python pipeline, which is unchanged and still runs
+standalone.
+
+```bash
+# once: apply supabase/migrations/20260815_create_agency_crm.sql, set the Supabase
+# env vars in .env.local, create a user in the Supabase dashboard
+npm run sync:leads -- --file leads.json --min-score 55
+npm run dev   # sign in at /login
+```
+
+See [`docs/agency-crm.md`](docs/agency-crm.md) for the data boundary, roles and RLS, the
+sync contract, and what is deliberately not built.
+
 ## Deployment
 
 Vercel, no special settings. The GitHub Pages workflow (`GITHUB_PAGES=true` static
-export) still exists but API-backed tracking only runs on Vercel.
+export) still exists but API-backed tracking only runs on Vercel — and the CRM does not
+run there at all, since every CRM route is server-rendered per request.

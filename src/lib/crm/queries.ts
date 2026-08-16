@@ -12,6 +12,7 @@ import type {
   Appointment,
   Client,
   Contact,
+  Contract,
   CrmLead,
   CrmLeadWithIntelligence,
   LeadDetail,
@@ -346,6 +347,44 @@ export async function listPayments(client: CrmSupabaseClient, limit = 200): Prom
     .order('due_at', { ascending: true, nullsFirst: false })
     .limit(limit);
   return unwrap<Payment[]>(result, 'listPayments');
+}
+
+export async function listPaymentsForClient(
+  client: CrmSupabaseClient,
+  clientId: string
+): Promise<Payment[]> {
+  const result = await client
+    .from('payments')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('due_at', { ascending: false, nullsFirst: false });
+  return unwrap<Payment[]>(result, 'listPaymentsForClient');
+}
+
+export async function listContractsForClient(
+  client: CrmSupabaseClient,
+  clientId: string
+): Promise<Contract[]> {
+  const result = await client
+    .from('contracts')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('start_date', { ascending: false, nullsFirst: false });
+  return unwrap<Contract[]>(result, 'listContractsForClient');
+}
+
+export async function listActivitiesForClient(
+  client: CrmSupabaseClient,
+  clientId: string,
+  limit = 50
+): Promise<Activity[]> {
+  const result = await client
+    .from('activities')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('occurred_at', { ascending: false })
+    .limit(limit);
+  return unwrap<Activity[]>(result, 'listActivitiesForClient');
 }
 
 // ---------------------------------------------------------------------------

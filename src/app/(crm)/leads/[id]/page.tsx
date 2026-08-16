@@ -1,0 +1,470 @@
+/**
+ * Lead detail — the page a salesperson works from.
+ *
+ * Four blocks, in the order they get used:
+ *
+ *   1. CRM state      — stage, owner, next action. Editable.
+ *   2. Business intel — everything lead_pipeline found. Read-only, by design:
+ *                       it is a synced replica, and an edit here would be
+ *                       silently overwritten on the next sync. The sync is the
+ *                       only writer, enforced by RLS rather than by convention.
+ *   3. Contacts       — who to talk to.
+ *   4. Timeline       — what has already happened.
+ */
+
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+
+import { AnalysisGrid } from '@/components/crm/AnalysisGrid';
+import {
+  AdvertisingBadge,
+  Badge,
+  Card,
+  Cell,
+  EmptyState,
+  ExternalLink,
+  Field,
+  FieldGrid,
+  PageHeader,
+  Row,
+  ScoreBadge,
+  StageBadge,
+  Table
+} from '@/components/crm/ui';
+import {
+  displayUrl,
+  formatDate,
+  formatDateTime,
+  formatMoney,
+  formatRelative,
+  humanise,
+  orDash
+} from '@/lib/crm/format';
+import { getLeadDetail } from '@/lib/crm/queries';
+import { crmClient } from '@/lib/crm/server';
+import { PIPELINE_STAGES, PIPELINE_STAGE_LABELS } from '@/lib/crm/types';
+
+import { addNote, changeStage, logCommunication } from './actions';
+
+export const dynamic = 'force-dynamic';
+
+const inputClass =
+  'w-full rounded-lg border border-line bg-ink-800 px-3 py-2 text-sm text-white placeholder:text-white/25';
+
+export default async function LeadDetailPage({ params }: { params: { id: string } }) {
+  const lead = await getLeadDetail(crmClient(), params.id);
+  if (!lead) notFound();
+
+  const info = lead.intelligence;
+  const name = info?.company_name ?? lead.external_lead_id;
+  const socials: [string, string][] = info
+    ? ([
+        ['Google Maps', info.google_maps_url],
+        ['Facebook', info.facebook_url],
+        ['Instagram', info.instagram_url],
+        ['LinkedIn', info.linkedin_url],
+        ['TikTok', info.tiktok_url],
+        ['YouTube', info.youtube_url]
+      ] as [string, string | null][])
+        .filter((entry): entry is [string, string] => Boolean(entry[1]))
+    : [];
+
+  return (
+    <>
+      <PageHeader
+        eyebrow={info?.niche ? humanise(info.niche) : 'Lead'}
+        title={name}
+        description={info?.lead_reason ?? undefined}
+        actions={
+          <>
+            <ScoreBadge score={info?.lead_score} />
+            <StageBadge stage={lead.pipeline_stage} />
+          </>
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        {/* ---------------------------------------------------------------- */}
+        {/* 1. CRM state                                                      */}
+        {/* ---------------------------------------------------------------- */}
+        <Card title="CRM state" description="Sales progress. Owned by your team, never by the sync.">
+          <FieldGrid>
+            <Field label="Stage">
+              <StageBadge stage={lead.pipeline_stage} />
+            </Field>
+            <Field label="Owner">{orDash(lead.owner?.full_name ?? lead.owner?.email)}</Field>
+            <Field label="Next action">{orDash(lead.next_action)}</Field>
+            <Field label="Next action at">{formatDateTime(lead.next_action_at)}</Field>
+            <Field label="First contacted">{formatDateTime(lead.first_contacted_at)}</Field>
+            <Field label="First replied">{formatDateTime(lead.first_replied_at)}</Field>
+            <Field label="Converted">{formatDateTime(lead.converted_at)}</Field>
+            <Field label="In CRM since">{formatDate(lead.created_at)}</Field>
+          </FieldGrid>
+
+          {lead.loss_reason ? (
+            <p className="mt-4 rounded-lg border border-rose-400/20 bg-rose-400/5 px-3 py-2 text-xs text-rose-200">
+              Lost: {lead.loss_reason}
+            </p>
+          ) : null}
+          {lead.disqualification_reason ? (
+            <p className="mt-4 rounded-lg border border-rose-400/20 bg-rose-400/5 px-3 py-2 text-xs text-rose-200">
+              Disqualified: {lead.disqualification_reason}
+            </p>
+          ) : null}
+
+          <form action={changeStage} className="mt-5 space-y-3 border-t border-line-soft pt-4">
+            <input type="hidden" name="lead_id" value={lead.id} />
+            <label className="block">
+              <span className="label-mono text-white/40">Move to stage</span>
+              <select name="stage" defaultValue={lead.pipeline_stage} className={`mt-1.5 ${inputClass}`}>
+                {PIPELINE_STAGES.map((stage) => (
+                  <option key={stage} value={stage}>
+                    {PIPELINE_STAGE_LABELS[stage]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <input
+              type="text"
+              name="reason"
+              placeholder="Reason (recorded when losing or disqualifying)"
+              className={inputClass}
+            />
+            <button
+              type="submit"
+              className="rounded-lg bg-electric-500 px-4 py-2 text-sm font-medium text-white hover:bg-electric-600"
+            >
+              Update stage
+            </button>
+          </form>
+        </Card>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* 2. Business intelligence                                          */}
+        {/* ---------------------------------------------------------------- */}
+        <Card
+          title="Business intelligence"
+          description="Synced from the lead pipeline. Read-only — the next sync would overwrite an edit."
+          className="xl:col-span-2"
+        >
+          {!info ? (
+            <EmptyState
+              title="No intelligence synced"
+              description="This CRM lead has no matching pipeline record yet. Run the sync to attach one."
+            />
+          ) : (
+            <>
+              <FieldGrid>
+                <Field label="Trading name">{orDash(info.trading_name)}</Field>
+                <Field label="Legal name">{orDash(info.legal_name)}</Field>
+                <Field label="Niche">{humanise(info.niche)}</Field>
+                <Field label="Website">
+                  {info.website ? (
+                    <ExternalLink href={info.website}>{displayUrl(info.website)}</ExternalLink>
+                  ) : (
+                    'No website found'
+                  )}
+                </Field>
+                <Field label="Phone">{orDash(info.business_phone)}</Field>
+                <Field label="Email">{orDash(info.business_email)}</Field>
+                <Field label="Address">{orDash(info.address)}</Field>
+                <Field label="City">{orDash(info.city)}</Field>
+                <Field label="Postcode">{orDash(info.postcode)}</Field>
+                <Field label="Google rating">
+                  {info.google_rating === null
+                    ? '—'
+                    : `${info.google_rating} (${info.google_review_count ?? 0} reviews)`}
+                </Field>
+                <Field label="Company number">{orDash(info.company_number)}</Field>
+                <Field label="Years trading">
+                  {info.years_in_operation === null ? '—' : info.years_in_operation}
+                </Field>
+              </FieldGrid>
+
+              <div className="mt-6 grid grid-cols-1 gap-4 border-t border-line-soft pt-5 sm:grid-cols-3">
+                <Field label="Lead score">
+                  <ScoreBadge score={info.lead_score} />{' '}
+                  <span className="text-white/40">{orDash(info.score_band)}</span>
+                </Field>
+                <Field label="Advertising">
+                  <AdvertisingBadge status={info.advertising_status} />
+                </Field>
+                <Field label="Recommended service">{orDash(info.recommended_service)}</Field>
+              </div>
+
+              {info.opportunities.length ? (
+                <div className="mt-5">
+                  <p className="label-mono mb-2 text-white/35">Opportunities detected</p>
+                  <ul className="space-y-1.5">
+                    {info.opportunities.map((opportunity) => (
+                      <li key={opportunity} className="text-sm text-white/75">
+                        · {opportunity}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {info.strengths.length ? (
+                <div className="mt-5">
+                  <p className="label-mono mb-2 text-white/35">Strengths</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {info.strengths.map((strength) => (
+                      <Badge key={strength} tone="positive">
+                        {strength}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {socials.length ? (
+                <div className="mt-5">
+                  <p className="label-mono mb-2 text-white/35">Online presence</p>
+                  <div className="flex flex-wrap gap-3 text-sm">
+                    {socials.map(([platform, url]) => (
+                      <ExternalLink key={platform} href={url}>
+                        {platform}
+                      </ExternalLink>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <details className="mt-6 border-t border-line-soft pt-4">
+                <summary className="cursor-pointer text-sm text-white/55 hover:text-white/80">
+                  Website analysis
+                </summary>
+                <div className="mt-4">
+                  <AnalysisGrid data={info.website_analysis} />
+                </div>
+              </details>
+
+              <details className="mt-3">
+                <summary className="cursor-pointer text-sm text-white/55 hover:text-white/80">
+                  Advertising analysis
+                </summary>
+                <div className="mt-4">
+                  <AnalysisGrid data={info.advertising_analysis} />
+                  <p className="mt-3 text-xs text-white/35">
+                    Evidence levels come from the pipeline: only <em>confirmed</em> means a source
+                    directly showed active advertising.
+                  </p>
+                </div>
+              </details>
+
+              <details className="mt-3">
+                <summary className="cursor-pointer text-sm text-white/55 hover:text-white/80">
+                  Score breakdown
+                </summary>
+                <div className="mt-4">
+                  <AnalysisGrid data={info.score_breakdown} />
+                </div>
+              </details>
+
+              <p className="mt-6 border-t border-line-soft pt-4 text-xs text-white/30">
+                Sources: {info.sources.length ? info.sources.join(', ') : 'unrecorded'} · discovered{' '}
+                {formatDate(info.date_discovered)} · last synced {formatRelative(info.synced_at)} ·
+                pipeline id <span className="font-mono">{info.external_lead_id}</span>
+              </p>
+            </>
+          )}
+        </Card>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* 3. Contacts                                                       */}
+        {/* ---------------------------------------------------------------- */}
+        <Card title="Contacts" description="People, added by your team as you learn who they are.">
+          {lead.contacts.length === 0 ? (
+            <EmptyState
+              title="No named contacts"
+              description="The pipeline collects published business contact details only; it never guesses a person's name or address."
+            />
+          ) : (
+            <ul className="space-y-3">
+              {lead.contacts.map((contact) => (
+                <li key={contact.id} className="rounded-lg border border-line-soft px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-white">
+                      {contact.full_name ??
+                        [contact.first_name, contact.last_name].filter(Boolean).join(' ') ??
+                        'Unnamed'}
+                    </span>
+                    {contact.is_primary ? <Badge tone="info">Primary</Badge> : null}
+                    {contact.is_decision_maker ? <Badge tone="positive">Decision maker</Badge> : null}
+                  </div>
+                  <p className="mt-1 text-xs text-white/45">{orDash(contact.job_title)}</p>
+                  <p className="mt-1.5 text-xs text-white/60">
+                    {orDash(contact.email)} · {orDash(contact.phone)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Opportunities, tasks and appointments for this lead               */}
+        {/* ---------------------------------------------------------------- */}
+        <Card title="Opportunities">
+          {lead.opportunities.length === 0 ? (
+            <EmptyState title="No opportunity yet" />
+          ) : (
+            <ul className="space-y-2">
+              {lead.opportunities.map((opportunity) => (
+                <li
+                  key={opportunity.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-line-soft px-3 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-white">{opportunity.name}</p>
+                    <p className="text-xs text-white/40">
+                      {humanise(opportunity.stage)} · {formatMoney(opportunity.monthly_value)}/mo
+                    </p>
+                  </div>
+                  <Badge tone={opportunity.stage === 'won' ? 'positive' : 'neutral'}>
+                    {opportunity.probability === null ? '—' : `${opportunity.probability}%`}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card title="Tasks &amp; appointments">
+          {lead.tasks.length === 0 && lead.appointments.length === 0 ? (
+            <EmptyState title="Nothing scheduled" />
+          ) : (
+            <ul className="space-y-2">
+              {lead.tasks.map((task) => (
+                <li key={task.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="truncate text-white/80">{task.title}</span>
+                  <span className="whitespace-nowrap text-xs text-white/40">
+                    {formatRelative(task.due_at)}
+                  </span>
+                </li>
+              ))}
+              {lead.appointments.map((appointment) => (
+                <li key={appointment.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="truncate text-white/80">📅 {appointment.title}</span>
+                  <span className="whitespace-nowrap text-xs text-white/40">
+                    {formatDateTime(appointment.starts_at)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* 4. Activity timeline                                              */}
+        {/* ---------------------------------------------------------------- */}
+        <Card
+          title="Activity timeline"
+          description="A record of what happened. Nothing on this page sends anything."
+          className="xl:col-span-2"
+        >
+          <div className="grid grid-cols-1 gap-4 border-b border-line-soft pb-5 sm:grid-cols-2">
+            <form action={addNote} className="space-y-2">
+              <input type="hidden" name="lead_id" value={lead.id} />
+              <span className="label-mono text-white/40">Add a note</span>
+              <textarea name="body" rows={3} required className={inputClass} placeholder="What happened?" />
+              <button
+                type="submit"
+                className="rounded-lg border border-line px-3 py-1.5 text-xs text-white/80 hover:border-electric-500/50"
+              >
+                Save note
+              </button>
+            </form>
+
+            <form action={logCommunication} className="space-y-2">
+              <input type="hidden" name="lead_id" value={lead.id} />
+              <span className="label-mono text-white/40">Log a call or email</span>
+              <div className="flex gap-2">
+                <select name="type" className={inputClass} defaultValue="call">
+                  <option value="call">Call</option>
+                  <option value="email">Email</option>
+                  <option value="meeting">Meeting</option>
+                </select>
+                <select name="direction" className={inputClass} defaultValue="outbound">
+                  <option value="outbound">Outbound</option>
+                  <option value="inbound">Inbound</option>
+                </select>
+              </div>
+              <input type="text" name="outcome" placeholder="Outcome" className={inputClass} />
+              <button
+                type="submit"
+                className="rounded-lg border border-line px-3 py-1.5 text-xs text-white/80 hover:border-electric-500/50"
+              >
+                Log it
+              </button>
+            </form>
+          </div>
+
+          {lead.activities.length === 0 ? (
+            <div className="pt-5">
+              <EmptyState title="No activity yet" />
+            </div>
+          ) : (
+            <ol className="mt-5 space-y-4">
+              {lead.activities.map((activity) => (
+                <li key={activity.id} className="flex gap-3">
+                  <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-electric-500/60" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone={activity.direction === 'inbound' ? 'positive' : 'neutral'}>
+                        {humanise(activity.type)}
+                      </Badge>
+                      <span className="text-xs text-white/35">{activity.direction}</span>
+                      <span className="text-xs text-white/30">
+                        {formatDateTime(activity.occurred_at)}
+                      </span>
+                    </div>
+                    {activity.subject ? (
+                      <p className="mt-1 text-sm font-medium text-white/85">{activity.subject}</p>
+                    ) : null}
+                    {activity.body ? (
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-white/60">{activity.body}</p>
+                    ) : null}
+                    {activity.outcome ? (
+                      <p className="mt-1 text-xs text-white/40">Outcome: {activity.outcome}</p>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </Card>
+
+        {/* Stage history */}
+        <Card title="Stage history" description="Written by a database trigger on every move.">
+          {lead.stageHistory.length === 0 ? (
+            <EmptyState title="No transitions recorded" />
+          ) : (
+            <Table head={['From', 'To', 'When']}>
+              {lead.stageHistory.map((entry) => (
+                <Row key={entry.id}>
+                  <Cell className="text-white/45">
+                    {entry.from_stage ? PIPELINE_STAGE_LABELS[entry.from_stage] : 'Created'}
+                  </Cell>
+                  <Cell>
+                    <StageBadge stage={entry.to_stage} />
+                  </Cell>
+                  <Cell className="whitespace-nowrap text-white/40">
+                    {formatRelative(entry.created_at)}
+                  </Cell>
+                </Row>
+              ))}
+            </Table>
+          )}
+        </Card>
+      </div>
+
+      <p className="mt-8 text-xs text-white/30">
+        <Link href="/leads" className="hover:text-white/60">
+          ← All leads
+        </Link>
+      </p>
+    </>
+  );
+}
