@@ -215,3 +215,57 @@ class TestSurveyReport:
         text = render_survey(self._run(niche_counts={}, discovered=0), [])
         assert "Nothing was measured" in text
         assert "Densest" not in text
+
+
+class TestCoverageReport:
+    """A thin record and a weak prospect score alike; the summary must separate them."""
+
+    def _leads(self, count=10, **flags):
+        from .conftest import make_lead
+
+        leads = []
+        for index in range(count):
+            lead = make_lead(company_name=f"Practice {index}", google_place_id=f"p{index}")
+            if not flags.get("ratings"):
+                lead.google_rating = None
+                lead.google_review_count = None
+            if not flags.get("websites"):
+                lead.website = None
+                lead.domain = None
+            lead.business_email = None
+            lead.advertising_analysis = None
+            leads.append(lead)
+        return leads
+
+    def test_it_reports_what_the_run_knew(self):
+        from lead_pipeline.report import render_coverage
+
+        text = "\n".join(render_coverage(self._leads()))
+        assert "Data coverage:" in text
+        assert "Google rating" in text and "0/10" in text
+
+    def test_missing_ratings_are_named_as_a_capped_score(self):
+        from lead_pipeline.report import render_coverage
+
+        text = "\n".join(render_coverage(self._leads()))
+        assert "credibility (15 pts)" in text
+        assert "GOOGLE_PLACES_API_KEY" in text
+
+    def test_mostly_websiteless_leads_are_flagged_as_floors(self):
+        from lead_pipeline.report import render_coverage
+
+        text = "\n".join(render_coverage(self._leads()))
+        assert "no website on record" in text
+        assert "floors, not verdicts" in text
+
+    def test_a_well_sourced_run_raises_no_website_warning(self):
+        from lead_pipeline.report import render_coverage
+
+        text = "\n".join(render_coverage(self._leads(ratings=True, websites=True)))
+        assert "no website on record" not in text
+        assert "GOOGLE_PLACES_API_KEY" not in text
+
+    def test_no_leads_means_no_coverage_block(self):
+        from lead_pipeline.report import render_coverage
+
+        assert render_coverage([]) == []

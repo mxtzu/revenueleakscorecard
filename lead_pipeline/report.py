@@ -103,6 +103,67 @@ def render_survey(run: RunStats, leads: Sequence[Lead]) -> str:
     return "\n".join(lines)
 
 
+def render_coverage(leads: Sequence[Lead]) -> list[str]:
+    """What the run actually knew about these businesses.
+
+    A low score can mean a weak prospect or a thin record, and the two call for
+    opposite responses: drop the lead, or configure another source and look
+    again. Without this block the summary cannot tell them apart - every lead
+    just looks mediocre.
+
+    Coverage gaps are reported against the scoring categories they starve, so
+    the fix is obvious rather than something to deduce from a spreadsheet.
+    """
+    if not leads:
+        return []
+
+    total = len(leads)
+    def pct(count: int) -> str:
+        return f"{count:>3}/{total} ({count * 100 // total:>3}%)"
+
+    with_site = sum(1 for lead in leads if lead.website)
+    with_email = sum(1 for lead in leads if lead.business_email)
+    with_phone = sum(1 for lead in leads if lead.business_phone)
+    with_rating = sum(1 for lead in leads if lead.google_rating is not None)
+    with_contact = sum(1 for lead in leads if lead.contact_name)
+    with_ads = sum(
+        1
+        for lead in leads
+        if lead.advertising_analysis
+        and lead.advertising_analysis.status != "google:unknown|meta:unknown"
+    )
+
+    lines = ["", "Data coverage:"]
+    lines.append(f"  Website        {pct(with_site)}")
+    lines.append(f"  Phone          {pct(with_phone)}")
+    lines.append(f"  Email          {pct(with_email)}")
+    lines.append(f"  Google rating  {pct(with_rating)}")
+    lines.append(f"  Named contact  {pct(with_contact)}")
+    lines.append(f"  Ad evidence    {pct(with_ads)}")
+
+    warnings: list[str] = []
+    if not with_rating:
+        warnings.append(
+            "No Google ratings: credibility (15 pts) scored from website quality alone. "
+            "Set GOOGLE_PLACES_API_KEY."
+        )
+    if not with_ads:
+        warnings.append(
+            "No advertising evidence: paid acquisition scored from niche demand alone. "
+            "Set a search API key (SERPAPI_API_KEY / BRAVE_SEARCH_API_KEY)."
+        )
+    if with_site * 2 < total:
+        warnings.append(
+            f"{total - with_site} of {total} have no website on record. Website analysis "
+            "drives 25 of the 100 points, so those scores are floors, not verdicts."
+        )
+    if warnings:
+        lines.append("")
+        lines.append("Scores are capped by missing inputs:")
+        lines.extend(f"  - {warning}" for warning in warnings)
+    return lines
+
+
 def render_summary(
     run: RunStats,
     leads: Sequence[Lead],
@@ -137,6 +198,8 @@ def render_summary(
             by_type[error.error_type] = by_type.get(error.error_type, 0) + 1
         summary = ", ".join(f"{k} x{v}" for k, v in sorted(by_type.items(), key=lambda kv: -kv[1])[:5])
         lines.append(f"Errors (non-fatal):    {len(run.errors)} ({summary})")
+
+    lines.extend(render_coverage(leads))
 
     if run.http:
         lines.append(
