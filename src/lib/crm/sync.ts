@@ -38,6 +38,9 @@ export interface PipelineLeadExport {
   domain?: string | null;
   business_phone?: string | null;
   business_email?: string | null;
+  contact_name?: string | null;
+  contact_role?: string | null;
+  contact_source_url?: string | null;
   address?: string | null;
   city?: string | null;
   postcode?: string | null;
@@ -98,6 +101,9 @@ export interface LeadIntelligenceRow {
   domain: string | null;
   business_phone: string | null;
   business_email: string | null;
+  contact_name: string | null;
+  contact_role: string | null;
+  contact_source_url: string | null;
   address: string | null;
   city: string | null;
   postcode: string | null;
@@ -214,6 +220,11 @@ export function toIntelligenceRow(
     domain: str(lead.domain),
     business_phone: str(lead.business_phone),
     business_email: str(lead.business_email),
+    // A name only ever arrives with the role that justified it; the pipeline
+    // does not emit one without the other, and neither does this.
+    contact_name: str(lead.contact_name),
+    contact_role: str(lead.contact_role),
+    contact_source_url: str(lead.contact_source_url),
     address: str(lead.address),
     city: str(lead.city),
     postcode: str(lead.postcode),

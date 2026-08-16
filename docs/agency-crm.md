@@ -30,6 +30,13 @@ therefore a replica with exactly one writer — the sync, running as the service
 is no INSERT, UPDATE or DELETE policy on that table for any CRM user, so "the sync owns
 this data" is enforced by row level security rather than by everyone remembering it.
 
+That boundary is why the decision-maker the pipeline discovers
+(`lead_intelligence.contact_name` / `contact_role` / `contact_source_url`) is *not* a
+`contacts` row. `contacts` is CRM state — people your team added, verified and possibly
+corrected — and a re-sync must never touch it. The discovered name is research: shown on
+the lead page with the role and the page it was read from, and promoted to a real contact
+by a human when it turns out to be right.
+
 The inverse holds too: **the sync never writes CRM state.** `crm_leads` rows are
 insert-only from the sync's point of view. A lead you moved to `won` stays `won` however
 many times it is re-scraped.
@@ -38,8 +45,8 @@ many times it is re-scraped.
 
 ## Setup
 
-1. **Create the schema.** Apply `supabase/migrations/20260815_create_agency_crm.sql` to
-   your Supabase project (SQL editor, or `supabase db push`).
+1. **Create the schema.** Apply every file in `supabase/migrations/` in filename order
+   to your Supabase project (SQL editor, or `supabase db push`).
 
 2. **Configure the app.** In `.env.local`:
 
@@ -192,7 +199,7 @@ npm run build
 CRM_TEST_DATABASE_URL=postgres://postgres@localhost:5432/postgres npm run db:test
 ```
 
-`supabase/tests/crm_schema_test.sql` runs 87 assertions covering structure, indexes on
+`supabase/tests/crm_schema_test.sql` runs 93 assertions covering structure, indexes on
 every foreign key, trigger behaviour, cascade rules, and RLS enforced under actual role
 impersonation — including that a viewer's INSERT is rejected and an anonymous request sees
 nothing. It found two genuine schema bugs while being written; run it after any migration

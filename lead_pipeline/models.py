@@ -75,6 +75,31 @@ class SourceRecord:
 
 
 @dataclass
+class PersonMention:
+    """A named business contact the company publishes about itself.
+
+    Only recorded when the page states the person's role explicitly. Every
+    mention carries the page it came from and the exact text that produced it,
+    so the claim "this is who to contact" can always be checked against the
+    source. A name without a stated business role is never recorded - guessing
+    who runs a business from a stray capitalised phrase is fabrication.
+    """
+
+    name: str
+    role: str
+    """The role as canonicalised by the extractor, e.g. "Managing Director"."""
+    role_seniority: int = 5
+    """1 = owner/founder/director, ascending to 5 = other named manager."""
+    source: str = "company_website"
+    source_url: str | None = None
+    evidence: str = ""
+    """The published text the name and role were read from."""
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class WebsiteAnalysis:
     """Observable facts about the business website."""
 
@@ -128,6 +153,7 @@ class WebsiteAnalysis:
     emails_found: list[EmailAssessment] = field(default_factory=list)
     social_links: dict[str, str] = field(default_factory=dict)
     phones_found: list[str] = field(default_factory=list)
+    people_found: list[PersonMention] = field(default_factory=list)
     landing_page_quality_score: int = 0
     website_quality_score: int = 0
     analysed_at: str = field(default_factory=iso_now)
@@ -138,6 +164,7 @@ class WebsiteAnalysis:
     def as_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["emails_found"] = [e.as_dict() for e in self.emails_found]
+        payload["people_found"] = [p.as_dict() for p in self.people_found]
         return payload
 
 
@@ -247,6 +274,10 @@ class Lead:
     business_email: str | None = None
     email_assessments: list[EmailAssessment] = field(default_factory=list)
     contact_name: str | None = None
+    contact_role: str | None = None
+    """The published role that made this person worth naming. Never inferred."""
+    contact_source_url: str | None = None
+    """The page the name and role were read from."""
 
     # --- address ---
     address: str | None = None
@@ -382,7 +413,8 @@ class Lead:
 
         simple_fields = [
             "company_name", "trading_name", "legal_name", "sub_niche", "description",
-            "website", "domain", "business_phone", "business_email", "contact_name",
+            "website", "domain", "business_phone", "business_email",
+            "contact_name", "contact_role", "contact_source_url",
             "address", "city", "postcode", "region", "country",
             "google_maps_url", "facebook_url", "instagram_url", "linkedin_url",
             "tiktok_url", "youtube_url", "google_category", "google_place_id",
@@ -460,6 +492,8 @@ class Lead:
             "business_phone": self.business_phone,
             "business_email": self.business_email,
             "contact_name": self.contact_name,
+            "contact_role": self.contact_role,
+            "contact_source_url": self.contact_source_url,
             "address": self.address,
             "city": self.city,
             "postcode": self.postcode,

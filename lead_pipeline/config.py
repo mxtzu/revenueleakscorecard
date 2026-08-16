@@ -164,6 +164,8 @@ class Settings:
     default_radius_km: float = 25.0
     default_country: str = "UK"
     allow_named_contact_emails: bool = False
+    collect_contact_names: bool = True
+    """Read decision-maker names the business publishes on its own site."""
 
     # --- logging ---
     log_level: str = "INFO"
@@ -235,6 +237,7 @@ class Settings:
             default_radius_km=_env_float("DEFAULT_RADIUS_KM", 25.0),
             default_country=_env("DEFAULT_COUNTRY", "UK") or "UK",
             allow_named_contact_emails=_env_bool("ALLOW_NAMED_CONTACT_EMAILS", False),
+            collect_contact_names=_env_bool("COLLECT_CONTACT_NAMES", True),
             log_level=_env("LOG_LEVEL", "INFO") or "INFO",
             log_file=Path(log_file) if log_file else None,
             niches_path=Path(_env("NICHES_PATH", str(DEFAULT_NICHES_PATH)) or DEFAULT_NICHES_PATH),

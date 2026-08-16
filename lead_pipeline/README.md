@@ -240,8 +240,8 @@ Top opportunities:
 
 **Company** — `company_name`, `trading_name`, `legal_name`, `niche`,
 `sub_niche`, `description`, `website`, `domain`, `business_phone`,
-`business_email`, `address`, `city`, `postcode`, `region`, `country`,
-`latitude`, `longitude`.
+`business_email`, `contact_name`, `contact_role`, `contact_source_url`,
+`address`, `city`, `postcode`, `region`, `country`, `latitude`, `longitude`.
 
 **Online presence** — `website`, `google_maps_url`, `facebook_url`,
 `instagram_url`, `linkedin_url`, `tiktok_url`, `youtube_url`.
@@ -386,6 +386,46 @@ a named person at a business; even then, only addresses on the company's own
 domain are accepted.
 
 **The pipeline never sends email.**
+
+---
+
+## Named contacts
+
+Local businesses usually publish who runs them — a "Meet the team" page, a
+director in the footer, a schema.org `Person` block. Knowing whether to address
+an approach to the practice principal or the marketing manager is the difference
+between a useful lead and a name on a list, so the pipeline reads it.
+
+`contact_name` is populated only when **all** of this holds:
+
+* the name appears on the business's own website, on a page robots.txt allows;
+* the page states a **business role** next to it — a name on its own is never
+  recorded, because inferring a person from a capitalised phrase is fabrication;
+* the role is one a decision would go through. Owner, founder, proprietor,
+  director, partner, principal, practice/clinic/office manager and marketing
+  lead are collected. Clinical, reception and junior staff are skipped: they are
+  not who an agency pitches, and a full staff directory would be personal data
+  the pipeline has no use for;
+* the text is a job-title *label*, not a sentence that happens to mention a role.
+
+Alongside the name, `contact_role` records the published role that justified it
+and `contact_source_url` records the page it was read from, so the claim can
+always be checked. At most five people are kept per business, and the most
+senior becomes `contact_name`.
+
+Four independent readings, strongest first: schema.org `Person` structured data;
+a team card (name heading, role beneath); one line carrying both
+("Tom Fletcher — Marketing Manager"); and prose ("run by our managing director
+Helen Carter").
+
+A named decision-maker adds +2.0 to the outreach-accessibility component of the
+score, and the score reason names the person and the role.
+
+Set `COLLECT_CONTACT_NAMES=false` to switch the whole thing off. Deleting a lead
+(`--delete-lead`) nulls the name, role and source URL along with the other
+contact details.
+
+**The pipeline never contacts anybody.** It records who a human should address.
 
 ---
 

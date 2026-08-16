@@ -395,7 +395,10 @@ class LeadScorer:
 
         if lead.contact_name:
             component.points += 2.0
-            component.reasons.append(f"Publicly listed business contact: {lead.contact_name} (+2.0)")
+            role = f", {lead.contact_role}" if lead.contact_role else ""
+            component.reasons.append(
+                f"Decision-maker named on the company website: {lead.contact_name}{role} (+2.0)"
+            )
         elif lead.linkedin_url:
             component.points += 1.0
             component.reasons.append("Company LinkedIn page available for contact routing (+1.0)")

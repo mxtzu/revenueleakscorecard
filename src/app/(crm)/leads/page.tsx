@@ -110,7 +110,7 @@ export default async function LeadsPage({ searchParams }: { searchParams?: Searc
             description="Import a pipeline export with `npm run sync:leads -- --file <export.json>`, or widen the filters."
           />
         ) : (
-          <Table head={['Business', 'Niche', 'Location', 'Score', 'Ads', 'Stage', 'Owner', 'Updated']}>
+          <Table head={['Business', 'Contact', 'Location', 'Score', 'Ads', 'Stage', 'Owner', 'Updated']}>
             {leads.map((lead) => {
               const info = lead.intelligence;
               return (
@@ -122,11 +122,22 @@ export default async function LeadsPage({ searchParams }: { searchParams?: Searc
                     >
                       {info?.company_name ?? lead.external_lead_id}
                     </Link>
-                    {info?.domain ? (
-                      <p className="mt-0.5 text-xs text-white/35">{info.domain}</p>
-                    ) : null}
+                    <p className="mt-0.5 text-xs text-white/35">
+                      {[info?.domain, info?.niche?.replace(/_/g, ' ')].filter(Boolean).join(' · ')}
+                    </p>
                   </Cell>
-                  <Cell className="text-white/50">{orDash(info?.niche?.replace(/_/g, ' '))}</Cell>
+                  <Cell className="text-white/50">
+                    {info?.contact_name ? (
+                      <>
+                        {info.contact_name}
+                        {info.contact_role ? (
+                          <p className="mt-0.5 text-xs text-white/30">{info.contact_role}</p>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span className="text-white/25">—</span>
+                    )}
+                  </Cell>
                   <Cell className="text-white/50">{orDash(info?.city)}</Cell>
                   <Cell>
                     <ScoreBadge score={info?.lead_score} />

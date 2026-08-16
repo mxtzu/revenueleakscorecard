@@ -12,7 +12,7 @@ Design goals:
 
 from __future__ import annotations
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -81,6 +81,8 @@ CREATE TABLE IF NOT EXISTS leads (
     phone_key                  TEXT,
     business_email             TEXT,
     contact_name               TEXT,
+    contact_role               TEXT,
+    contact_source_url         TEXT,
     address                    TEXT,
     city                       TEXT,
     postcode                   TEXT,
@@ -272,7 +274,7 @@ CREATE TABLE IF NOT EXISTS checkpoints (
 LEAD_COLUMNS = [
     "id", "company_name", "normalized_name", "trading_name", "legal_name", "niche", "sub_niche",
     "description", "website", "domain", "business_phone", "phone_key", "business_email",
-    "contact_name", "address", "city", "postcode", "region", "country", "latitude", "longitude",
+    "contact_name", "contact_role", "contact_source_url", "address", "city", "postcode", "region", "country", "latitude", "longitude",
     "google_maps_url", "facebook_url", "instagram_url", "linkedin_url", "tiktok_url", "youtube_url",
     "google_rating", "google_review_count", "google_category", "google_place_id", "opening_hours",
     "business_status", "company_number", "incorporation_date", "years_in_operation", "lead_score",

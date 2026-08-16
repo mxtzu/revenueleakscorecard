@@ -72,6 +72,7 @@ GOOD_DENTAL_HOMEPAGE = """
     <a href="/veneers">Veneers</a>
     <a href="/composite-bonding">Composite bonding</a>
     <a href="/prices">Prices</a>
+    <a href="/meet-the-team">Meet the team</a>
     <a href="/contact">Contact</a>
   </nav>
   <footer>
@@ -123,6 +124,28 @@ POOR_ROOFER_HOMEPAGE = """
 </body></html>
 """
 
+TEAM_PAGE = """
+<!doctype html><html><head><title>Meet the team | Riverside Dental Studio</title>
+<meta name="viewport" content="width=device-width">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Person",
+ "name":"Helen Carter","jobTitle":"Managing Director"}
+</script>
+</head>
+<body>
+<h1>Meet the team</h1>
+<div class="team">
+  <div class="card"><h3>Dr Jane Smith</h3><p>Principal Dentist</p></div>
+  <div class="card"><h3>Mark O'Brien</h3><p>Practice Manager</p></div>
+  <div class="card"><h3>Aisha Rahman</h3><p>Dental Nurse</p></div>
+  <div class="card"><h3>Our Treatments</h3><p>Invisalign, whitening and implants</p></div>
+</div>
+<ul><li>Tom Fletcher - Marketing Manager</li><li>Book Your Consultation</li></ul>
+<p>Our Newcastle Upon Tyne clinic manager keeps both sites running.</p>
+<footer><p>&copy; 2024 Riverside Dental Studio</p></footer>
+</body></html>
+"""
+
 ROBOTS_ALLOW_ALL = "User-agent: *\nAllow: /\n"
 ROBOTS_DISALLOW_ALL = "User-agent: *\nDisallow: /\n"
 
@@ -163,6 +186,7 @@ def transport() -> FakeTransport:
                             "headers": {"content-type": "text/plain"}},
             "riversidedentalstudio.co.uk/invisalign": {"status": 200, "text": INVISALIGN_LANDING_PAGE},
             "riversidedentalstudio.co.uk/contact": {"status": 200, "text": CONTACT_PAGE},
+            "riversidedentalstudio.co.uk/meet-the-team": {"status": 200, "text": TEAM_PAGE},
             "riversidedentalstudio.co.uk": {"status": 200, "text": GOOD_DENTAL_HOMEPAGE},
             "northernroofingsolutions.co.uk": {"status": 200, "text": POOR_ROOFER_HOMEPAGE},
         },

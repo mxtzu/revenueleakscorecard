@@ -25,6 +25,7 @@ from ..utils.email_validation import EmailAssessment, classify_email, pick_prima
 from ..utils.http import HttpClient, HttpError, RobotsDisallowed
 from ..utils.logging import get_logger
 from ..utils.normalization import clean_text, extract_domain, normalize_url
+from .people import MAX_PEOPLE_PER_SITE, best_contact, dedupe_people
 from .seo import (
     PageSignals,
     analyse_page,
@@ -163,7 +164,14 @@ class WebsiteAnalyzer:
         if not response.is_html:
             return (response, None)
 
-        signals = analyse_page(response.text, response.final_url or url, keywords=keywords or [])
+        signals = analyse_page(
+            response.text,
+            response.final_url or url,
+            keywords=keywords or [],
+            company_name=lead.company_name,
+            locality=" ".join(filter(None, (lead.city, lead.region))),
+            collect_people=self.settings.collect_contact_names,
+        )
         return (response, signals)
 
     # ------------------------------------------------------------------
@@ -258,6 +266,12 @@ class WebsiteAnalyzer:
 
         analysis.phones_found = sorted({tel for page in pages for tel in page.phone_links})
 
+        # Named decision-makers the business publishes about itself. Capped so
+        # the pipeline records who to address, not a staff directory.
+        analysis.people_found = dedupe_people(
+            person for page in pages for person in page.people
+        )[:MAX_PEOPLE_PER_SITE]
+
         postcodes = {pc for page in pages for pc in page.postcodes}
         analysis.location_count = len(postcodes)
         analysis.multiple_locations = len(postcodes) >= 2
@@ -326,6 +340,16 @@ def apply_website_analysis(lead: Lead, analysis: WebsiteAnalysis) -> None:
 
     if not lead.description and analysis.meta_description:
         lead.set_field("description", analysis.meta_description, "company_website")
+
+    # The most senior person the business names publicly. Recorded with the role
+    # that justified it and the page it was read from - a name on its own is a
+    # claim nobody can check, and the role is what tells a salesperson whether
+    # this person can say yes.
+    contact = best_contact(analysis.people_found)
+    if contact and not lead.contact_name:
+        lead.set_field("contact_name", contact.name, "company_website")
+        lead.set_field("contact_role", contact.role, "company_website")
+        lead.set_field("contact_source_url", contact.source_url, "company_website")
 
 
 def compute_quality_scores(analysis: WebsiteAnalysis, niche: NicheRule) -> None:

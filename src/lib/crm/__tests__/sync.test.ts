@@ -83,6 +83,26 @@ describe('toIntelligenceRow', () => {
     expect(withUrl.google_maps_url).toBe('https://maps.google.com/?cid=1');
   });
 
+  it('carries the published contact through with its role and source', () => {
+    const row = toIntelligenceRow(
+      lead({
+        contact_name: 'Helen Carter',
+        contact_role: 'Managing Director',
+        contact_source_url: 'https://riverside.co.uk/meet-the-team'
+      })
+    );
+    expect(row.contact_name).toBe('Helen Carter');
+    expect(row.contact_role).toBe('Managing Director');
+    expect(row.contact_source_url).toBe('https://riverside.co.uk/meet-the-team');
+  });
+
+  it('leaves the contact null when the pipeline named nobody', () => {
+    const row = toIntelligenceRow(lead());
+    expect(row.contact_name).toBeNull();
+    expect(row.contact_role).toBeNull();
+    expect(row.contact_source_url).toBeNull();
+  });
+
   it('falls back to score.total when lead_score is absent', () => {
     const row = toIntelligenceRow(lead({ lead_score: null, score: { total: 61, band: 'good' } }));
     expect(row.lead_score).toBe(61);

@@ -173,6 +173,12 @@ export interface LeadIntelligence {
   domain: string | null;
   business_phone: string | null;
   business_email: string | null;
+  /** Decision-maker published on the company website. Null unless one was found. */
+  contact_name: string | null;
+  /** The published role that justified recording the name. Never inferred. */
+  contact_role: string | null;
+  /** The page the name and role were read from. */
+  contact_source_url: string | null;
   address: string | null;
   city: string | null;
   postcode: string | null;

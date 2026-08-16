@@ -335,6 +335,58 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+\echo '== published contact =='
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  lead_id uuid;
+  stored  record;
+begin
+  perform pg_temp.assert(
+    (select count(*) from information_schema.columns
+      where table_schema = 'public' and table_name = 'lead_intelligence'
+        and column_name in ('contact_name', 'contact_role', 'contact_source_url')
+        and data_type = 'text') = 3,
+    'lead_intelligence carries the published contact, its role and its source'
+  );
+
+  insert into public.crm_leads (external_lead_id) values ('ext_contact') returning id into lead_id;
+  insert into public.lead_intelligence
+    (crm_lead_id, external_lead_id, company_name, contact_name, contact_role, contact_source_url)
+  values
+    (lead_id, 'ext_contact', 'Riverside Dental', 'Helen Carter', 'Managing Director',
+     'https://riverside.co.uk/meet-the-team');
+
+  select contact_name, contact_role, contact_source_url into stored
+    from public.lead_intelligence where crm_lead_id = lead_id;
+  perform pg_temp.assert(stored.contact_name = 'Helen Carter', 'the published contact is stored');
+  perform pg_temp.assert(stored.contact_role = 'Managing Director', 'the stated role is stored');
+  perform pg_temp.assert(
+    stored.contact_source_url like 'https://%',
+    'the page the name came from is stored'
+  );
+
+  -- A business that publishes nobody must leave all three empty rather than
+  -- inheriting a value from anywhere else.
+  insert into public.crm_leads (external_lead_id) values ('ext_anon') returning id into lead_id;
+  insert into public.lead_intelligence (crm_lead_id, external_lead_id, company_name)
+  values (lead_id, 'ext_anon', 'Northern Roofing');
+  select contact_name, contact_role into stored
+    from public.lead_intelligence where crm_lead_id = lead_id;
+  perform pg_temp.assert(
+    stored.contact_name is null and stored.contact_role is null,
+    'no published contact leaves the columns null'
+  );
+
+  perform pg_temp.assert(
+    exists (select 1 from pg_indexes where schemaname = 'public'
+             and indexname = 'lead_intelligence_contact_name_idx'),
+    'named leads are indexed for filtering'
+  );
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 \echo '== row level security =='
 -- ---------------------------------------------------------------------------
 -- lead_intelligence and payments must have NO user-facing write policy: the

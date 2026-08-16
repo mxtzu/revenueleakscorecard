@@ -167,6 +167,24 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
                 </Field>
                 <Field label="Phone">{orDash(info.business_phone)}</Field>
                 <Field label="Email">{orDash(info.business_email)}</Field>
+                <Field label="Published contact">
+                  {info.contact_name ? (
+                    <>
+                      {info.contact_name}
+                      {info.contact_role ? (
+                        <span className="text-white/45"> · {info.contact_role}</span>
+                      ) : null}
+                      {info.contact_source_url ? (
+                        <>
+                          {' '}
+                          <ExternalLink href={info.contact_source_url}>source</ExternalLink>
+                        </>
+                      ) : null}
+                    </>
+                  ) : (
+                    'Not published'
+                  )}
+                </Field>
                 <Field label="Address">{orDash(info.address)}</Field>
                 <Field label="City">{orDash(info.city)}</Field>
                 <Field label="Postcode">{orDash(info.postcode)}</Field>
@@ -275,10 +293,17 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
         {/* 3. Contacts                                                       */}
         {/* ---------------------------------------------------------------- */}
         <Card title="Contacts" description="People, added by your team as you learn who they are.">
+          {info?.contact_name ? (
+            <p className="mb-3 rounded-lg border border-line-soft bg-white/[0.02] px-3 py-2 text-xs text-white/55">
+              Research found <span className="text-white/85">{info.contact_name}</span>
+              {info.contact_role ? ` (${info.contact_role})` : ''} on the company website. Add them
+              below to make them a CRM contact — the sync will not do it for you.
+            </p>
+          ) : null}
           {lead.contacts.length === 0 ? (
             <EmptyState
               title="No named contacts"
-              description="The pipeline collects published business contact details only; it never guesses a person's name or address."
+              description="The pipeline records a decision-maker only where the business publishes one with a stated role; it never guesses a person's name."
             />
           ) : (
             <ul className="space-y-3">

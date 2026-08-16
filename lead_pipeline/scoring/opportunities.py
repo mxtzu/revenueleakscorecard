@@ -328,6 +328,11 @@ def build_audit_record(
         contact={
             "phone": lead.business_phone,
             "email": lead.business_email,
+            # Who to address, and the role the business itself published that
+            # makes them worth addressing. Absent unless the site said so.
+            "name": lead.contact_name,
+            "role": lead.contact_role,
+            "name_source_url": lead.contact_source_url,
             "website": lead.website,
             "google_maps_url": lead.google_maps_url,
             "socials": lead.social_profiles,

@@ -19,6 +19,7 @@ from ..models import (
     Confidence,
     Lead,
     LeadScore,
+    PersonMention,
     PipelineError,
     ScoreComponent,
     SourceRecord,
@@ -64,12 +65,30 @@ class Database:
         self.conn.row_factory = sqlite3.Row
         with self._lock:
             self.conn.executescript(SCHEMA)
+            self._add_missing_columns()
             self.conn.execute(
                 "INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?) "
                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 (str(SCHEMA_VERSION),),
             )
             self.conn.commit()
+
+    def _add_missing_columns(self) -> None:
+        """Bring an existing database up to the current column set.
+
+        ``CREATE TABLE IF NOT EXISTS`` silently does nothing to a table that
+        already exists, so a database written by an older version keeps its old
+        columns and every insert then fails on the new ones. Adding nullable
+        columns is the one schema change SQLite does cheaply and safely, so it
+        happens on open rather than requiring anyone to delete their leads file.
+        """
+        existing = {row["name"] for row in self.conn.execute("PRAGMA table_info(leads)")}
+        for column, ddl in (
+            ("contact_role", "TEXT"),
+            ("contact_source_url", "TEXT"),
+        ):
+            if column not in existing:
+                self.conn.execute(f"ALTER TABLE leads ADD COLUMN {column} {ddl}")
 
     # ------------------------------------------------------------------ runs
     def start_run(
@@ -261,6 +280,8 @@ class Database:
             "phone_key": lead.phone_key,
             "business_email": lead.business_email,
             "contact_name": lead.contact_name,
+            "contact_role": lead.contact_role,
+            "contact_source_url": lead.contact_source_url,
             "address": lead.address,
             "city": lead.city,
             "postcode": lead.postcode,
@@ -623,7 +644,8 @@ class Database:
                 """
                 UPDATE leads SET
                     deleted_at = ?, delete_reason = ?, business_email = NULL, business_phone = NULL,
-                    phone_key = NULL, contact_name = NULL, emails_json = '[]'
+                    phone_key = NULL, contact_name = NULL, contact_role = NULL,
+                    contact_source_url = NULL, emails_json = '[]'
                 WHERE id = ?
                 """,
                 (iso_now(), reason or "requested", lead_id),
@@ -666,6 +688,8 @@ def row_to_lead(row: dict[str, Any], *, website: dict[str, Any] | None = None,
         business_phone=row.get("business_phone"),
         business_email=row.get("business_email"),
         contact_name=row.get("contact_name"),
+        contact_role=row.get("contact_role"),
+        contact_source_url=row.get("contact_source_url"),
         address=row.get("address"),
         city=row.get("city"),
         postcode=row.get("postcode"),
@@ -727,11 +751,16 @@ def row_to_lead(row: dict[str, Any], *, website: dict[str, Any] | None = None,
 
 def _website_from_payload(payload: dict[str, Any]) -> WebsiteAnalysis:
     fields = WebsiteAnalysis.__dataclass_fields__
-    kwargs = {k: v for k, v in payload.items() if k in fields and k != "emails_found"}
+    nested = {"emails_found", "people_found"}
+    kwargs = {k: v for k, v in payload.items() if k in fields and k not in nested}
     analysis = WebsiteAnalysis(**kwargs)
     analysis.emails_found = [
         EmailAssessment(**{k: v for k, v in item.items() if k in EmailAssessment.__dataclass_fields__})
         for item in payload.get("emails_found", [])
+    ]
+    analysis.people_found = [
+        PersonMention(**{k: v for k, v in item.items() if k in PersonMention.__dataclass_fields__})
+        for item in payload.get("people_found", [])
     ]
     return analysis
 

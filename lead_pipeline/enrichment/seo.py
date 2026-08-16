@@ -17,8 +17,10 @@ from html.parser import HTMLParser
 from typing import Any, Iterable
 from urllib.parse import urljoin, urlsplit
 
+from ..models import PersonMention
 from ..utils.email_validation import extract_emails
 from ..utils.normalization import clean_text, normalize_postcode, normalize_url
+from .people import extract_people
 
 # --------------------------------------------------------------------------
 # Signal vocabularies
@@ -201,6 +203,16 @@ SOCIAL_IGNORE_PATH_TOKENS = ("sharer", "share.php", "intent", "plugins", "dialog
 CONTACT_PAGE_HINTS = ("contact", "get-in-touch", "enquir", "book", "appointment", "quote", "consultation")
 ABOUT_PAGE_HINTS = ("about", "our-team", "meet-the-team", "who-we-are")
 PRICE_PAGE_HINTS = ("price", "pricing", "fees", "cost", "finance")
+# Pages that name who runs the business. Ranked above pricing because a lead
+# with a named decision-maker is worth more than one with a published price.
+TEAM_PAGE_HINTS = ("team", "our-people", "staff", "meet-", "who-we-are", "leadership", "our-story")
+
+# Elements whose text is short enough to be a name or a job title on its own.
+BLOCK_TAGS = (
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "p", "li", "span", "strong", "b", "em", "figcaption", "td", "th", "dt", "dd",
+)
+MAX_TEXT_BLOCKS = 800
 
 
 # --------------------------------------------------------------------------
@@ -222,6 +234,13 @@ class ParsedDocument:
     images: list[str] = field(default_factory=list)
     buttons: list[str] = field(default_factory=list)
     classes: list[str] = field(default_factory=list)
+    blocks: list[str] = field(default_factory=list)
+    """Short text runs in document order.
+
+    Adjacency is the signal: a team card is a name in one element and a role in
+    the next, and that relationship is lost once the page is flattened to a
+    single string.
+    """
 
     @property
     def lowered_html(self) -> str:
@@ -334,6 +353,25 @@ class _FallbackParser(HTMLParser):
             self.text_parts.append(text)
 
 
+def _text_blocks(texts: Iterable[str]) -> list[str]:
+    """Keep short, non-repeating text runs in document order.
+
+    Nested elements yield the same text more than once (a `<p>` inside a `<div>`
+    inside a `<li>`), which would fake adjacency between an element and itself.
+    Consecutive duplicates are collapsed for that reason.
+    """
+    blocks: list[str] = []
+    for text in texts:
+        if not text or len(text) > 200:
+            continue
+        if blocks and blocks[-1] == text:
+            continue
+        blocks.append(text)
+        if len(blocks) >= MAX_TEXT_BLOCKS:
+            break
+    return blocks
+
+
 def parse_html(html: str, url: str = "") -> ParsedDocument:
     """Parse a page into the structures the detectors need."""
     document = ParsedDocument(url=url, html=html or "")
@@ -374,6 +412,9 @@ def parse_html(html: str, url: str = "") -> ParsedDocument:
             " ".join(tag.get("class") or []) + " " + str(tag.get("id") or "")
             for tag in soup.find_all(attrs={"class": True})
         ][:400]
+        document.blocks = _text_blocks(
+            clean_text(tag.get_text(" ", strip=True)) for tag in soup.find_all(BLOCK_TAGS)
+        )
         return document
     except ImportError:
         pass
@@ -396,6 +437,9 @@ def parse_html(html: str, url: str = "") -> ParsedDocument:
     document.buttons = parser.buttons
     document.forms = parser.forms
     document.classes = parser.classes
+    # The fallback parser emits text in document order already, so the raw run
+    # sequence is a serviceable stand-in for element blocks.
+    document.blocks = _text_blocks(clean_text(part) for part in parser.text_parts)
     return document
 
 
@@ -457,6 +501,7 @@ class PageSignals:
     has_finance: bool = False
     tracking: TrackingSignals = field(default_factory=TrackingSignals)
     emails: list[str] = field(default_factory=list)
+    people: list[PersonMention] = field(default_factory=list)
     social_links: dict[str, str] = field(default_factory=dict)
     internal_links: list[str] = field(default_factory=list)
     keywords_found: list[str] = field(default_factory=list)
@@ -469,8 +514,21 @@ class PageSignals:
     html_bytes: int = 0
 
 
-def analyse_page(html: str, url: str, *, keywords: Iterable[str] = ()) -> PageSignals:
-    """Extract every on-page signal from one HTML document."""
+def analyse_page(
+    html: str,
+    url: str,
+    *,
+    keywords: Iterable[str] = (),
+    company_name: str = "",
+    locality: str = "",
+    collect_people: bool = True,
+) -> PageSignals:
+    """Extract every on-page signal from one HTML document.
+
+    ``company_name`` and ``locality`` are used only to reject a trading name or
+    a town that reads like a person ("Smith & Sons", "Newcastle Upon Tyne");
+    ``collect_people`` turns off named-contact extraction entirely.
+    """
     document = parse_html(html, url)
     lowered = document.lowered_html
     text_lower = document.text.lower()
@@ -547,6 +605,11 @@ def analyse_page(html: str, url: str, *, keywords: Iterable[str] = ()) -> PageSi
     # --- contact details --------------------------------------------------
     mailtos = [href[7:] for href, _ in document.links if href.lower().startswith("mailto:")]
     signals.emails = list(dict.fromkeys(extract_emails(" ".join(mailtos)) + extract_emails(document.text)))
+
+    if collect_people:
+        signals.people = extract_people(
+            document, company_name=company_name, locality=locality
+        )
 
     signals.social_links = extract_social_links(document.links)
     signals.internal_links = _internal_links(document.links, url)
@@ -707,6 +770,10 @@ def rank_internal_links(links: Iterable[str], *, url_hints: Iterable[str], limit
         for hint in CONTACT_PAGE_HINTS:
             if hint in lowered:
                 score += 4
+        for hint in TEAM_PAGE_HINTS:
+            if hint in lowered:
+                score += 3
+                break  # "meet-the-team" must not out-score a real contact page
         for hint in PRICE_PAGE_HINTS:
             if hint in lowered:
                 score += 2
