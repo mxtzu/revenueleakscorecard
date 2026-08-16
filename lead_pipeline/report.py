@@ -15,12 +15,29 @@ def render_survey(run: RunStats, leads: Sequence[Lead]) -> str:
     """Per-niche counts for a discovery-only run.
 
     Answers "which of these verticals actually exists in volume around here"
-    before committing to a full scrape. The numbers are what the configured
-    sources returned after dedupe, not a census: OpenStreetMap maps regulated
-    premises (dentists, clinics) far more completely than sole-trader crafts,
-    so a low count can mean a thin niche or a thinly mapped one. Compare like
-    with like, and add Google Places for coverage the free sources miss.
+    before committing to a full scrape.
+
+    Every requested niche is listed, including the ones that returned nothing,
+    and a niche whose source errored is labelled unmeasured rather than shown
+    as a zero. Reading a failed query as "no businesses here" is how a whole
+    vertical gets written off by mistake.
+
+    The numbers are what the configured sources returned after dedupe, not a
+    census: OpenStreetMap maps regulated premises (dentists, clinics) far more
+    completely than sole-trader crafts, so a low count can mean a thin niche or
+    a thinly mapped one. Compare like with like, and add Google Places for
+    coverage the free sources miss.
     """
+    counts = run.niche_counts or {}
+    requested = list(run.niches) or list(counts)
+
+    # Discovery errors are recorded against "<niche>@<location>".
+    errored = {
+        (error.target or "").split("@", 1)[0]
+        for error in run.errors
+        if error.stage == "discovery" and error.target
+    }
+
     lines = ["=" * 62, "NICHE SURVEY", "=" * 62]
     lines.append(f"Locations:  {', '.join(run.locations) or '-'}")
     lines.append(f"Sources:    {', '.join(run.sources_used) or '-'}")
@@ -28,22 +45,51 @@ def render_survey(run: RunStats, leads: Sequence[Lead]) -> str:
                  f"{run.duplicates_removed} duplicates removed")
     lines.append("")
 
-    counts = run.niche_counts or {}
-    if not counts:
-        lines.append("No businesses found. Widen --radius, add --source google_places,")
-        lines.append("or check the errors above.")
-    else:
-        width = max(len(name) for name in counts)
-        biggest = max(counts.values())
-        for name, count in counts.items():
+    if not requested:
+        lines.append("No niches were requested.")
+        lines.append("=" * 62)
+        return "\n".join(lines)
+
+    ranked = sorted(requested, key=lambda name: (-counts.get(name, 0), name))
+    width = max(len(name) for name in ranked)
+    biggest = max(counts.values()) if counts else 0
+    unmeasured: list[str] = []
+
+    for name in ranked:
+        count = counts.get(name, 0)
+        if count:
             bar = "#" * max(1, round(count / biggest * 28))
             lines.append(f"  {name.ljust(width)}  {str(count).rjust(4)}  {bar}")
-        lines.append("")
-        winner = next(iter(counts))
-        lines.append(f"Densest niche: {winner} ({counts[winner]} businesses)")
-        lines.append("Run it in full with:")
+        elif name in errored:
+            unmeasured.append(name)
+            lines.append(f"  {name.ljust(width)}     -  unmeasured (source errors)")
+        else:
+            lines.append(f"  {name.ljust(width)}     0  none found")
+
+    lines.append("")
+    if counts:
+        winner = min(counts, key=lambda name: (-counts[name], name))
         location = run.locations[0] if run.locations else "<location>"
-        lines.append(f'  python pipeline.py --niche {winner} --location "{location}"')
+        lines.append(f"Densest measured niche: {winner} ({counts[winner]} businesses)")
+        lines.append("Run it in full with:")
+        lines.append(
+            f'  python -m lead_pipeline.pipeline --niche {winner} --location "{location}"'
+        )
+    else:
+        lines.append("Nothing was measured. Widen --radius, add --source google_places,")
+        lines.append("or check the errors below.")
+
+    if unmeasured:
+        lines.append("")
+        lines.append(
+            f"{len(unmeasured)} of {len(requested)} niches went unmeasured. "
+            "They are not empty - retry them alone:"
+        )
+        location = run.locations[0] if run.locations else "<location>"
+        lines.append(
+            f'  python -m lead_pipeline.pipeline --niche {",".join(unmeasured)} '
+            f'--location "{location}" --survey'
+        )
 
     if run.errors:
         by_type: dict[str, int] = {}
@@ -52,7 +98,6 @@ def render_survey(run: RunStats, leads: Sequence[Lead]) -> str:
         summary = ", ".join(f"{k} x{v}" for k, v in sorted(by_type.items(), key=lambda kv: -kv[1])[:5])
         lines.append("")
         lines.append(f"Errors (non-fatal): {len(run.errors)} ({summary})")
-        lines.append("A niche that errored is unmeasured, not empty.")
 
     lines.append("=" * 62)
     return "\n".join(lines)

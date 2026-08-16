@@ -159,3 +159,59 @@ class TestExportAll:
     def test_unknown_format_raises(self, exportable_lead, tmp_path):
         with pytest.raises(ValueError, match="Unknown export format"):
             export_all([exportable_lead], formats=["xlsx"], output_dir=tmp_path, basename="bad")
+
+
+class TestSurveyReport:
+    """A niche whose source failed must never read as a niche with no businesses."""
+
+    def _run(self, **overrides):
+        from lead_pipeline.models import PipelineError, RunStats
+
+        run = RunStats(
+            niches=["cosmetic_dentists", "roofers", "builders"],
+            locations=["Sunderland"],
+            sources_used=["openstreetmap"],
+            discovered=17,
+            niche_counts={"roofers": 17},
+        )
+        run.errors.append(
+            PipelineError(
+                stage="discovery",
+                source="openstreetmap",
+                target="cosmetic_dentists@Sunderland",
+                error_type="overpass_runtime_error",
+                message="runtime error",
+            )
+        )
+        for key, value in overrides.items():
+            setattr(run, key, value)
+        return run
+
+    def test_an_errored_niche_is_unmeasured_not_zero(self):
+        from lead_pipeline.report import render_survey
+
+        text = render_survey(self._run(), [])
+        assert "cosmetic_dentists" in text
+        assert "unmeasured (source errors)" in text
+        # builders had no error and no results: that genuinely is a zero.
+        assert "builders" in text and "none found" in text
+
+    def test_it_names_the_niches_to_retry(self):
+        from lead_pipeline.report import render_survey
+
+        text = render_survey(self._run(), [])
+        assert "1 of 3 niches went unmeasured" in text
+        assert "--niche cosmetic_dentists" in text
+
+    def test_the_winner_comes_from_measured_niches_only(self):
+        from lead_pipeline.report import render_survey
+
+        text = render_survey(self._run(), [])
+        assert "Densest measured niche: roofers (17 businesses)" in text
+
+    def test_a_run_that_measured_nothing_says_so(self):
+        from lead_pipeline.report import render_survey
+
+        text = render_survey(self._run(niche_counts={}, discovered=0), [])
+        assert "Nothing was measured" in text
+        assert "Densest" not in text
