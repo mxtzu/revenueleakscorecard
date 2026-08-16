@@ -208,6 +208,7 @@ Top opportunities:
 | `--rate N` | Default per-host requests/second (default 1.0) |
 | `--no-cache` | Bypass the HTTP cache for this run |
 | `--dry-run` | Run without writing to the database |
+| `--survey` | Count businesses per niche near a location, then stop (no enrichment, no export) |
 
 **Output**
 
@@ -233,6 +234,44 @@ Top opportunities:
 | `--export-only` | Export stored leads without scraping |
 | `--delete-lead ID` | Soft-delete (hides the lead, scrubs contact fields) |
 | `--purge-lead ID` | Hard-delete the lead and every dependent record |
+
+---
+
+## Picking a niche for a location
+
+Before committing to a full scrape, measure which verticals actually exist in
+volume where you are targeting:
+
+```bash
+python pipeline.py --all-niches --location "Sunderland" --radius 15 --survey
+```
+
+```
+==============================================================
+NICHE SURVEY
+==============================================================
+Locations:  Sunderland
+Sources:    openstreetmap
+Found:      59 businesses, 0 duplicates removed
+
+  aesthetic_clinics         22  ############################
+  cosmetic_dentists         14  ##################
+  car_detailing_wrapping     9  ###########
+  ...
+
+Densest niche: aesthetic_clinics (22 businesses)
+```
+
+Discovery only — no websites fetched, no scoring, no export — so it finishes in
+a minute or two instead of an hour.
+
+**Read the counts for what they are.** They are what the *configured sources*
+returned, not a census. OpenStreetMap maps regulated premises (dentists,
+clinics, opticians) close to completely and sole-trader crafts (roofers,
+pavers, builders) barely at all, so a low count can mean a thin niche or a
+thinly mapped one. Add `--source google_places` with an API key for coverage
+the free sources miss, and treat a niche that errored as unmeasured rather than
+empty.
 
 ---
 

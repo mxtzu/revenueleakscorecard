@@ -73,6 +73,8 @@ class PipelineConfig:
     fixture_path: str | None = None
     recheck_days: int = 14
     dry_run: bool = False
+    survey: bool = False
+    """Discover and dedupe only: count what exists per niche, enrich nothing."""
     include_raw: bool = False
     resume: bool = True
     country: str = "UK"
@@ -239,6 +241,31 @@ class Pipeline:
             dedupe_result = self.deduplicator.dedupe(raw_leads)
             leads = dedupe_result.leads
             self.stats.duplicates_removed = dedupe_result.duplicates_removed
+
+            self.stats.niche_counts = _count_by_niche(leads)
+
+            if config.survey:
+                # Stop here. A survey answers "how many of these exist around
+                # this location", which needs discovery only - enriching every
+                # niche just to count them would cost hours and hammer sites
+                # the user has not decided to target yet.
+                self.stats.finished_at = iso_now()
+                self.stats.status = "interrupted" if self.stats.interrupted else "completed"
+                self.stats.http = self.client.stats.as_dict()
+                self.stats.cache = self.client.cache.stats()
+                self.stats.errors.extend(self.ctx.errors)
+                if self.stats.run_id is not None:
+                    self.db.record_errors(self.stats.errors, self.stats.run_id)
+                    self.db.finish_run(
+                        self.stats.run_id,
+                        status=self.stats.status,
+                        discovered=self.stats.discovered,
+                        duplicates_removed=self.stats.duplicates_removed,
+                        error_count=len(self.stats.errors),
+                        interrupted=self.stats.interrupted,
+                        notes=self.stats.notes,
+                    )
+                return PipelineResult(run=self.stats, leads=leads, qualified=[], audit_records=[])
 
             if config.total_limit:
                 leads = leads[: config.total_limit]
@@ -631,6 +658,14 @@ class Pipeline:
             if rule.key == lead.niche:
                 return rule
         return self.config.niches[0]
+
+
+def _count_by_niche(leads: Sequence[Lead]) -> dict[str, int]:
+    """How many distinct businesses each niche turned up, most first."""
+    counts: dict[str, int] = {}
+    for lead in leads:
+        counts[lead.niche] = counts.get(lead.niche, 0) + 1
+    return dict(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
 
 
 def _band_counts(leads: Iterable[Lead]) -> dict[str, int]:

@@ -24,6 +24,23 @@ class TestBlockingKeys:
         lead = make_lead(website="https://facebook.com/somepage", google_place_id=None)
         keys = Deduplicator().blocking_keys(lead)
         assert not any(k.startswith("domain:facebook.com") for k in keys)
+        assert not any(k.startswith("host:facebook.com") for k in keys)
+
+    def test_the_full_host_is_a_key_alongside_the_registrable_domain(self):
+        lead = make_lead(website="https://book.riverside.co.uk/appointments")
+        keys = Deduplicator().blocking_keys(lead)
+        assert "host:book.riverside.co.uk" in keys
+        assert "domain:riverside.co.uk" in keys
+
+    def test_a_site_builder_subdomain_still_identifies_the_business(self):
+        """`salonone.wixsite.com` is an identity; `wixsite.com` is not."""
+        lead = make_lead(
+            company_name="Salon One", website="https://salonone.wixsite.com/home",
+            google_place_id=None,
+        )
+        keys = Deduplicator().blocking_keys(lead)
+        assert "host:salonone.wixsite.com" in keys
+        assert not any(k.startswith("domain:wixsite.com") for k in keys)
 
 
 class TestDeduplication:
@@ -158,3 +175,78 @@ def test_records_from_three_sources_collapse_to_one_lead():
     assert len(result.leads) == 1
     assert result.duplicates_removed == 2
     assert len(result.leads[0].sources) >= 3
+
+
+class TestSharedParentDomains:
+    """Two businesses under one registrable domain are two businesses.
+
+    `root_domain()` reduces `a.example.co.uk` and `b.example.co.uk` to the same
+    string. Treating that as proof of identity merged unrelated leads and
+    silently destroyed one of them — the failure mode is invisible, because the
+    survivor looks like a normal lead.
+    """
+
+    def _distinct(self, count: int) -> list[Lead]:
+        leads = []
+        for i in range(count):
+            lead = make_lead(
+                company_name=f"Sunderland Dental {i + 1}",
+                website=f"https://practice{i + 1}.dentalgroup.co.uk",
+                business_phone=f"0191 555 {1000 + i}",
+                address=f"{i + 1} High Street West, Sunderland",
+                postcode=f"SR1 3{i}A",
+                city="Sunderland",
+                google_place_id=None,
+            )
+            leads.append(lead)
+        return leads
+
+    def test_distinct_businesses_on_one_parent_domain_are_kept_apart(self):
+        leads = self._distinct(4)
+        result = Deduplicator().dedupe(leads)
+        assert len(result.leads) == 4
+        assert result.duplicates_removed == 0
+
+    def test_near_identical_names_do_not_merge_them_either(self):
+        """The fuzzy pass needs corroboration; a shared parent domain is not it."""
+        leads = self._distinct(3)
+        for lead in leads:
+            lead.business_phone = None  # phone_key is derived, so it clears too
+            lead.normalize()
+        result = Deduplicator().dedupe(leads)
+        assert len(result.leads) == 3
+
+    def test_two_site_builder_tenants_are_kept_apart(self):
+        leads = [
+            make_lead(company_name="Salon One", website="https://salonone.wixsite.com/home",
+                      business_phone=None, postcode="SR1 1AA", city="Sunderland",
+                      address="1 Fawcett Street, Sunderland", google_place_id=None),
+            make_lead(company_name="Salon Two", website="https://salontwo.wixsite.com/home",
+                      business_phone=None, postcode="SR1 2BB", city="Sunderland",
+                      address="2 Fawcett Street, Sunderland", google_place_id=None),
+        ]
+        assert len(Deduplicator().dedupe(leads).leads) == 2
+
+    def test_one_business_across_apex_www_and_subdomain_still_merges(self):
+        """The registrable-domain key still does its job when nothing conflicts."""
+        leads = [
+            make_lead(company_name="Riverside Dental Studio", website="https://riverside.co.uk",
+                      business_phone="0191 555 0101", postcode="NE1 6EE", google_place_id=None),
+            make_lead(company_name="Riverside Dental Studio",
+                      website="https://www.riverside.co.uk/contact",
+                      business_phone="0191 555 0101", postcode="NE1 6EE", google_place_id=None),
+            make_lead(company_name="Riverside Dental", website="https://book.riverside.co.uk",
+                      business_phone=None, postcode="NE1 6EE", google_place_id=None),
+        ]
+        assert len(Deduplicator().dedupe(leads).leads) == 1
+
+    def test_the_same_host_from_two_sources_still_merges(self):
+        leads = [
+            make_lead(source_name="google_places", website="https://riverside.co.uk",
+                      google_place_id=None),
+            make_lead(source_name="openstreetmap", company_name="Riverside Dental",
+                      website="https://riverside.co.uk/about", google_place_id=None),
+        ]
+        result = Deduplicator().dedupe(leads)
+        assert len(result.leads) == 1
+        assert result.duplicates_removed == 1

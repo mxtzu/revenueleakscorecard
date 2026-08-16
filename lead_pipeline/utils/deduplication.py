@@ -22,6 +22,7 @@ from .logging import get_logger
 from .normalization import (
     address_key,
     company_name_similarity,
+    extract_domain,
     normalize_company_name,
     postcode_outward,
     root_domain,
@@ -102,6 +103,16 @@ class Deduplicator:
         keys: list[str] = []
         if lead.google_place_id:
             keys.append(f"place:{lead.google_place_id.strip()}")
+        # The full hostname is the strong signal: two businesses share a website
+        # only if they share the whole host. The registrable domain is not -
+        # `salonone.godaddysites.com` and `salontwo.godaddysites.com` both reduce
+        # to `godaddysites.com`, and merging on that silently destroys one of two
+        # unrelated leads. Site builders can be listed in _GENERIC_HOSTS, but a
+        # list of every shared-parent host that will ever exist cannot be
+        # maintained, so the key itself has to be the precise one.
+        host = extract_domain(lead.domain or lead.website)
+        if host and host not in _GENERIC_HOSTS:
+            keys.append(f"host:{host}")
         domain = root_domain(lead.domain or lead.website)
         if domain and domain not in _GENERIC_HOSTS:
             keys.append(f"domain:{domain}")
@@ -158,11 +169,22 @@ class Deduplicator:
                 if existing is None:
                     key_index[block] = key
                     continue
-                # A shared address or name+locality is weaker evidence than a
-                # shared place id / domain / phone: two different businesses
-                # can sit in one building. Refuse the merge when the records
-                # contradict each other on a strong identifier.
+                # A shared address, name+locality or registrable domain is
+                # weaker evidence than a shared place id, hostname or phone:
+                # two different businesses can sit in one building, and two
+                # unrelated sites can sit under one parent domain. Refuse the
+                # merge when the records contradict each other on a strong
+                # identifier. `domain` still merges an apex host with its own
+                # subdomain, which is the case it exists for.
                 if kind in {"addr", "name_loc"} and self._contradicts(by_id[existing], lead):
+                    continue
+                # The registrable-domain key exists for one job: merging a
+                # business's apex host with its own www/subdomain variants. It
+                # cannot distinguish that from two tenants of a shared parent,
+                # so it needs a second identifier to agree, not merely to be
+                # absent. Refusing to merge costs a duplicate row; merging
+                # wrongly destroys a lead and leaves nothing to notice.
+                if kind == "domain" and not self._same_business_signal(by_id[existing], lead):
                     continue
                 uf.union(existing, key)
                 reasons.setdefault(uf.find(key), []).append(block.split("|", 1)[-1])
@@ -238,13 +260,34 @@ class Deduplicator:
             return True
         return False
 
+    def _same_business_signal(self, a: Lead, b: Lead) -> bool:
+        """Does a second identifier positively agree that these are one business?
+
+        Deliberately requires agreement rather than the absence of disagreement:
+        two records that share nothing but a parent domain are not evidence of
+        anything.
+        """
+        if a.google_place_id and b.google_place_id:
+            return a.google_place_id == b.google_place_id
+        if a.phone_key and b.phone_key:
+            return a.phone_key == b.phone_key
+        if a.postcode and b.postcode:
+            return a.postcode == b.postcode
+        return False
+
     def _corroborated(self, a: Lead, b: Lead) -> bool:
-        """A fuzzy name match alone is not enough - require a second signal."""
-        domain_a, domain_b = root_domain(a.domain or a.website), root_domain(b.domain or b.website)
-        if domain_a and domain_b:
-            if domain_a == domain_b:
+        """A fuzzy name match alone is not enough - require a second signal.
+
+        The website has to match on the *full host*. A shared registrable domain
+        is not corroboration: "Sunderland Dental 1" and "Sunderland Dental 2" on
+        two subdomains of one parent score high on name similarity and would
+        merge on that alone, which is how two real businesses become one lead.
+        """
+        host_a, host_b = extract_domain(a.domain or a.website), extract_domain(b.domain or b.website)
+        if host_a and host_b:
+            if host_a == host_b:
                 return True
-            return False  # different domains == genuinely different businesses
+            return False  # different websites == genuinely different businesses
         if a.phone_key and b.phone_key:
             if a.phone_key == b.phone_key:
                 return True

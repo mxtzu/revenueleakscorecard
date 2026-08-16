@@ -586,6 +586,8 @@ class RunStats:
     enriched: int = 0
     qualified: int = 0
     score_bands: dict[str, int] = field(default_factory=dict)
+    niche_counts: dict[str, int] = field(default_factory=dict)
+    """Businesses found per niche, after dedupe. Populated by a survey run."""
     errors: list[PipelineError] = field(default_factory=list)
     http: dict[str, int] = field(default_factory=dict)
     cache: dict[str, int] = field(default_factory=dict)

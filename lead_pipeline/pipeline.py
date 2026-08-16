@@ -29,6 +29,7 @@ from lead_pipeline.report import (  # noqa: E402
     render_niche_table,
     render_source_table,
     render_summary,
+    render_survey,
     write_audit_text,
 )
 from lead_pipeline.runner import Pipeline, PipelineConfig  # noqa: E402
@@ -84,6 +85,13 @@ def build_parser() -> argparse.ArgumentParser:
     behaviour.add_argument("--ignore-robots", action="store_true",
                            help=argparse.SUPPRESS)  # intentionally undocumented; see README compliance note
     behaviour.add_argument("--dry-run", action="store_true", help="Run without writing to the database.")
+    behaviour.add_argument(
+        "--survey",
+        action="store_true",
+        help="Count how many businesses each niche has near the location, then stop. "
+             "Discovery only: no website fetching, no scoring, no export. Use it with "
+             "--all-niches to pick which niche is worth a full run.",
+    )
 
     output = parser.add_argument_group("output")
     output.add_argument("--output", help="Output directory (default ./output).")
@@ -281,6 +289,7 @@ def main(argv: list[str] | None = None) -> int:
         fixture_path=args.fixture,
         recheck_days=settings.recheck_days,
         dry_run=args.dry_run,
+        survey=args.survey,
         include_raw=args.include_raw,
         resume=not args.no_resume,
         country=country,
@@ -301,6 +310,11 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\nAborted.", file=sys.stderr)
         return 130
+
+    if args.survey:
+        print()
+        print(render_survey(result.run, result.leads))
+        return 0
 
     exports = dict(result.exports)
     if args.audit_text and result.audit_records:
