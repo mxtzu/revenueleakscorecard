@@ -102,6 +102,10 @@ Environment variables, all three at Production scope:
 | `STRIPE_SECRET_KEY` | **server only** | Optional; enables invoices and retainers |
 | `STRIPE_WEBHOOK_SECRET` | **server only** | Required with Stripe — without it nothing is ever marked paid |
 | `STRIPE_CURRENCY` | server only | Defaults to `gbp` |
+| `RESEND_API_KEY` / `RESEND_WEBHOOK_SECRET` | **server only** | Optional; outreach email and reply detection |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | **server only** | Optional; outreach SMS |
+| `OUTREACH_RUN_SECRET` | server only | Optional; lets a scheduler drive the engine |
+| `NEXT_PUBLIC_SITE_URL` | browser + server | Base for unsubscribe links; required with outreach |
 
 The service-role key must never be given a `NEXT_PUBLIC_` name — that compiles
 it into the browser bundle and hands every visitor full database access.
@@ -454,6 +458,127 @@ Cancelling a retainer ends it at the period boundary by default. Immediate
 cancellation takes away service the client has already paid for, so it is the
 explicit choice.
 
+### Outreach
+
+This is the only part of the CRM that contacts strangers, and it is built
+around that fact.
+
+**Sending is off until somebody turns it on.** `outreach_settings.sending_enabled`
+defaults to `false`, and only an owner or admin can change it. Applying the
+migration to a database full of scraped leads does nothing; pointing a cron job
+at the run endpoint does nothing. There is a schema assertion for the default,
+and an engine test that a run with the switch off does not even look for due
+enrolments.
+
+**Enrolment is a person's decision.** Nothing bulk-enrols a list. A human opens
+a lead, picks a sequence, and the enrolment records who did it (`enrolled_by`).
+
+#### Setting it up
+
+```
+RESEND_API_KEY=…              # email
+RESEND_WEBHOOK_SECRET=whsec_… # replies, bounces, complaints
+TWILIO_ACCOUNT_SID=…          # SMS (optional)
+TWILIO_AUTH_TOKEN=…
+NEXT_PUBLIC_SITE_URL=https://crm.youragency.com
+```
+
+Webhook endpoints to register:
+
+| Provider | Endpoint | Carries |
+| --- | --- | --- |
+| Resend | `/api/crm/outreach/email` | delivery events and inbound replies |
+| Twilio | `/api/crm/outreach/sms` | inbound texts, including STOP |
+
+Then set the sender identity, caps and window on `/outreach`, read the
+templates, and only then switch sending on.
+
+Driving the engine on a schedule:
+
+```bash
+curl -X POST "$SITE/api/crm/outreach/run" -H "Authorization: Bearer $OUTREACH_RUN_SECRET"
+```
+
+Fails closed — without the secret the scheduled path answers 503 rather than
+running unauthenticated.
+
+#### The send gate
+
+Every message passes these, in this order, and the first objection is recorded
+as the reason:
+
+1. sending switched on at all
+2. **the address is not suppressed** — consent before convenience
+3. the lead is not `do_not_contact`, `lost`, `disqualified` or `won`
+4. there is an address for the channel, and a sender configured
+5. the per-run and daily caps
+6. the sending window
+
+Caps and windows are *transient* — the enrolment keeps its place and goes out
+next run. Suppression and a missing address are *settled*: the sequence stops
+rather than retrying forever.
+
+#### Suppression
+
+`suppressions` is the most important table in the migration. It is written by
+the unsubscribe link, by a reply that reads as an opt-out, by a bounce, by a
+spam complaint, and by anyone on the team who is asked in person. It is checked
+on the send path via `crm_is_suppressed()`, not as a filter on a list
+somewhere.
+
+It is stored independently of any lead: **deleting a lead does not resurrect
+permission to email them**, and there is a test for exactly that. Addresses are
+lower-cased and phone numbers stripped to digits on the way in, so the same
+person written three ways suppresses once. Any writer can add an entry;
+removing one is admin-only, because that is what puts an address back in the
+send path.
+
+#### Replies
+
+Reply detection does not stop sequences itself. The inbound webhook writes an
+inbound **activity**, and `halt_outreach_on_inbound_reply` — the trigger from
+the very first migration — stops every live enrolment and moves the lead to
+`replied`. One implementation of that rule, in the database, holding however
+the reply arrived.
+
+Opt-out detection reads only the reply's own words. Without stripping the
+quoted original, every reply would contain our own footer — including the word
+"Unsubscribe" — and every single replier would be opted out. It leans towards
+stopping: a false positive costs one prospect who has to be re-enrolled by
+hand, a false negative means emailing somebody who asked twice to be left
+alone.
+
+#### What goes out
+
+Templates use `{{first_name}}`-style placeholders. **An unresolved placeholder
+is a failure, not a blank** — a lead with no first name produces a skipped send
+with a reason, not "Hi ,". Every email carries an unsubscribe link, the sender
+name and a postal address, appended by the code rather than left to whoever
+wrote the template. Every SMS ends with "Reply STOP to opt out."
+
+Unsubscribe links carry an opaque per-enrolment token, never a lead id — a URL
+with a countable id would let anyone unsubscribe anyone. `GET` on that link
+shows a confirmation page and `POST` performs it, because corporate mail
+scanners fetch every URL in an incoming email and a GET that unsubscribed would
+opt out people who never saw the message. RFC 8058 one-click clients POST
+directly and are honoured immediately.
+
+#### Call steps
+
+A `call`, `linkedin` or `other` step is work for a person. The engine creates a
+task and advances the sequence; it does not dial anybody. Logging the call is
+the existing `crm_log_call` from Sprint 3.
+
+#### The send log
+
+`outreach_messages` records what was sent **and what was refused, with the
+reason**. "Why did this lead never get step 3" is the question an outreach tool
+is asked most often, and a log that only records successes cannot answer it.
+Both ledgers have no write policy for any CRM role.
+
+A unique index on `(lead_outreach_id, step_id)` means two overlapping engine
+runs race on the database rather than both emailing the same person.
+
 ### Documents
 
 Files live in a **private** Supabase Storage bucket (`crm-documents`), created by
@@ -512,7 +637,7 @@ Put in triggers rather than application code, so it holds no matter which client
 | `/tasks` | Open tasks grouped by urgency; create, edit, complete, reopen, delete |
 | `/calendar` | Appointments by day; book, edit, change status, delete; connect and sync Google Calendar |
 | `/opportunities` | Deals with value totals; create, edit, delete, manage proposals, mark sent, win into a client, mark lost |
-| `/outreach` | Sequence and step templates. Writes templates only — nothing sends |
+| `/outreach` | Sending switch, enrolments, send log, do-not-contact list, and the sequence templates |
 | `/clients` | Accounts; create |
 | `/clients/[id]` | Account edit, contracts, documents, payments, notes, tasks |
 | `/payments` | MRR, collected, outstanding and overdue; invoices and retainers, with Stripe controls |
@@ -527,12 +652,15 @@ to the page as well as to the API.
 Present in the schema so the data model does not need re-cutting later, but with no
 implementation and no UI:
 
-cold email sending · SMS · automated calling · voicemail drops · AI transcription ·
-AI meeting summaries · client portal · advanced analytics · an automated outreach
-engine.
+automated calling · voicemail drops · AI transcription · AI meeting summaries ·
+client portal · advanced analytics.
 
-Google Calendar and Meet were on this list until Sprint 4, and Stripe until
-Sprint 5; those are now built. Everything else above is still schema only.
+Google Calendar and Meet were on this list until Sprint 4, Stripe until Sprint 5,
+and cold email, SMS and the outreach engine until Sprint 6. Those are now built.
+Everything else above is still schema only.
+
+The CRM still does not place a call. A `call` step in a sequence creates a task
+for a person; logging what was said is a human action.
 
 The CRM records that a call happened; it does not place one. Nothing in it sends a message
 to a lead.
@@ -597,4 +725,18 @@ subscription mapping, the idempotency ledger, out-of-order events, refunds, and
 webhook signatures — including a tampered payload, a wrong secret and an
 expired timestamp, all verified with Stripe's own signer and verifier.
 
-Run all four after any migration change.
+`supabase/tests/outreach_test.sql` covers the engine schema. Since this is the
+first migration that lets the CRM contact a stranger, the assertions are mostly
+about restraint: sending is off by default, a suppression survives the lead
+being deleted, matching is case- and format-insensitive, neither ledger can be
+written from the UI, a step cannot be sent twice, and an inbound activity stops
+every live sequence.
+
+The engine itself is covered by unit tests against fake providers and an
+in-memory Postgres (`src/lib/outreach/__tests__/`): the gate ordering, the
+sending window across time zones and weekends, template refusal, the
+unsubscribe footer, opt-out detection against quoted replies, bounce
+suppression, and webhook signatures for both providers — tampered payload,
+wrong secret, expired timestamp.
+
+Run all five after any migration change.

@@ -64,6 +64,9 @@ import {
 } from '../../_actions/crud';
 import { removeDocument, uploadDocument } from '../../_actions/records';
 import { convertLead } from '../../_actions/workflow';
+import { enrolLead } from '../../_actions/outreach';
+import { EnrolForm } from '@/components/crm/outreachPanels';
+import { getOutreachSettings, listMessagesForLead } from '@/lib/outreach/queries';
 import { ConvertLeadForm } from '@/components/crm/workflowForms';
 import { isClosedStage } from '@/lib/crm/workflow';
 import { noteText } from '@/lib/crm/mutations';
@@ -72,7 +75,8 @@ import {
   getLeadDetail,
   listAssignableProfiles,
   listDocumentsForLead,
-  listOutreachForLead
+  listOutreachForLead,
+  listOutreachSequences
 } from '@/lib/crm/queries';
 import { crmSession } from '@/lib/crm/server';
 import { PIPELINE_STAGES, PIPELINE_STAGE_LABELS } from '@/lib/crm/types';
@@ -92,11 +96,15 @@ export default async function LeadDetailPage({
   searchParams?: { error?: string };
 }) {
   const { client, profile } = await crmSession();
-  const [lead, team, documents, outreach] = await Promise.all([
+  const [lead, team, documents, outreach, sequences, outreachSettings, sentMessages] =
+    await Promise.all([
     getLeadDetail(client, params.id),
     listAssignableProfiles(client),
     listDocumentsForLead(client, params.id),
-    listOutreachForLead(client, params.id)
+    listOutreachForLead(client, params.id),
+    listOutreachSequences(client),
+    getOutreachSettings(client),
+    listMessagesForLead(client, params.id)
   ]);
   if (!lead) notFound();
 
@@ -715,12 +723,33 @@ export default async function LeadDetailPage({
         </Card>
 
         {/*
-          Enrolment state, read-only. Nothing in the CRM enrols a lead — the
-          sending engine is not built — but `halt_outreach_on_inbound_reply`
-          writes here, so state something else changed is at least visible.
+          Enrolling is a deliberate act by a person, and it is recorded against
+          their name. Nothing bulk-enrols a scraped list.
         */}
-        {outreach.length ? (
-          <Card title="Outreach" description="Set by the database, not by this page.">
+        <Card
+          title="Outreach"
+          description="Sequences this lead is in. A reply stops them automatically."
+        >
+          {writable && !isClosedStage(lead.pipeline_stage) ? (
+            <div className="mb-4">
+              <Disclosure summary="Enrol in a sequence" tone="primary">
+                <EnrolForm
+                  action={enrolLead}
+                  leadId={lead.id}
+                  returnTo={here}
+                  sendingEnabled={Boolean(outreachSettings?.sending_enabled)}
+                  sequences={sequences
+                    .filter((sequence) => sequence.active)
+                    .map((sequence) => ({ value: sequence.id, label: sequence.name }))}
+                  contacts={contactOptions}
+                />
+              </Disclosure>
+            </div>
+          ) : null}
+
+          {outreach.length === 0 ? (
+            <EmptyState title="Not in any sequence" />
+          ) : (
             <ul className="space-y-2">
               {outreach.map((enrolment) => (
                 <li key={enrolment.id} className="rounded-lg border border-line-soft px-3 py-2.5">
@@ -739,8 +768,31 @@ export default async function LeadDetailPage({
                 </li>
               ))}
             </ul>
-          </Card>
-        ) : null}
+          )}
+
+          {sentMessages.length > 0 ? (
+            <div className="mt-4 border-t border-line-soft pt-3">
+              <p className="label-mono mb-2 text-white/35">Messages</p>
+              <ul className="space-y-1.5 text-xs">
+                {sentMessages.slice(0, 8).map((entry) => (
+                  <li key={entry.id} className="flex flex-wrap items-baseline gap-2">
+                    <span className="text-white/60">{humanise(entry.channel)}</span>
+                    <Badge tone={entry.status === 'sent' || entry.status === 'delivered' ? 'positive' : entry.status === 'skipped' ? 'warning' : 'neutral'}>
+                      {humanise(entry.status)}
+                    </Badge>
+                    <span className="text-white/35">
+                      {formatRelative(entry.sent_at ?? entry.created_at)}
+                    </span>
+                    {/* The refusal reason is the useful half when nothing arrived. */}
+                    {entry.skip_reason ? (
+                      <span className="w-full text-amber-200/60">{entry.skip_reason}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </Card>
 
         {/* ---------------------------------------------------------------- */}
         {/* 4. Activity timeline                                              */}

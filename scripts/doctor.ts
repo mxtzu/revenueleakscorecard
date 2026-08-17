@@ -92,6 +92,7 @@ function checkConfig(): void {
 
   checkCalendarConfig();
   checkStripeConfig();
+  checkOutreachConfig();
 
   if (process.env.GITHUB_PAGES === 'true') {
     record('Build target', 'fail', 'GITHUB_PAGES=true forces a static export',
@@ -208,6 +209,59 @@ function checkStripeConfig(): void {
   }
 }
 
+/**
+ * Outreach is the only part of the CRM that contacts strangers, so the checks
+ * here are about the ways it can be half-configured and dangerous.
+ *
+ * A sending key with no webhook secret is the one that actually costs money: a
+ * hard-bounced address never gets suppressed, the engine keeps mailing it, and
+ * the sending domain's reputation goes with it.
+ */
+function checkOutreachConfig(): void {
+  const hasEmail = Boolean(process.env.RESEND_API_KEY);
+  const hasSms = Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
+
+  if (!hasEmail && !hasSms) {
+    record('Outreach', 'warn', 'No sending provider configured',
+      'Optional. Set RESEND_API_KEY for email, or the Twilio pair for SMS.');
+    return;
+  }
+
+  record('Outreach', 'ok', [hasEmail ? 'email' : null, hasSms ? 'SMS' : null].filter(Boolean).join(' + '));
+
+  if (hasEmail && !process.env.RESEND_WEBHOOK_SECRET) {
+    record('Outreach webhook', 'fail', 'RESEND_WEBHOOK_SECRET is not set',
+      'Bounces and spam complaints will never suppress an address, and replies will not stop ' +
+        'sequences. Add the endpoint in Resend and set the signing secret.');
+  } else if (hasEmail) {
+    record('Outreach webhook', 'ok', 'Reply and bounce handling is signed');
+  }
+
+  if (hasSms && !process.env.TWILIO_WEBHOOK_URL) {
+    record('Twilio webhook URL', 'warn', 'TWILIO_WEBHOOK_URL is not set',
+      'Twilio signs the URL from its console. Behind a proxy, verification fails unless the ' +
+        'public URL is stated here.');
+  }
+
+  if (!process.env.NEXT_PUBLIC_SITE_URL) {
+    record('Unsubscribe links', 'fail', 'NEXT_PUBLIC_SITE_URL is not set',
+      'Unsubscribe links would point at whichever deployment sent the message and may stop ' +
+        'working. Every marketing email needs a working one.');
+  } else {
+    record('Unsubscribe links', 'ok', `Built from ${process.env.NEXT_PUBLIC_SITE_URL}`);
+  }
+
+  const leaked = Object.keys(process.env).filter(
+    (name) =>
+      name.startsWith('NEXT_PUBLIC_') &&
+      /RESEND_API_KEY|RESEND_WEBHOOK|TWILIO_AUTH|OUTREACH_RUN_SECRET/.test(name)
+  );
+  if (leaked.length) {
+    record('Outreach key exposure', 'fail', `Compiled into the browser: ${leaked.join(', ')}`,
+      'Rotate them and rename without the NEXT_PUBLIC_ prefix.');
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Connectivity and schema
 // ---------------------------------------------------------------------------
@@ -217,7 +271,9 @@ const CRM_TABLES = [
   'opportunities', 'proposals', 'clients', 'contracts', 'payments', 'notes',
   'documents', 'pipeline_stage_history',
   'calendar_accounts', 'calendar_credentials', 'calendar_deletions',
-  'subscriptions', 'stripe_events'
+  'subscriptions', 'stripe_events',
+  'outreach_settings', 'suppressions', 'outreach_messages', 'inbound_messages',
+  'provider_events'
 ];
 
 async function checkDatabase(): Promise<void> {
@@ -274,6 +330,24 @@ async function checkDatabase(): Promise<void> {
     record('Sales workflow', 'ok', 'Transition functions installed');
   }
 
+  // The single most important operational fact about a deployment with
+  // outreach configured: is it currently allowed to contact people.
+  const { data: outreach } = await admin
+    .from('outreach_settings')
+    .select('sending_enabled, from_email, daily_send_limit')
+    .eq('id', true)
+    .maybeSingle();
+  const sending = outreach as
+    | { sending_enabled: boolean; from_email: string | null; daily_send_limit: number }
+    | null;
+  if (sending?.sending_enabled) {
+    record('Outreach sending', 'ok',
+      `ON — up to ${sending.daily_send_limit}/day from ${sending.from_email ?? 'no address set'}`,
+      'This deployment will contact leads. Turn it off on /outreach if that is not intended.');
+  } else if (sending) {
+    record('Outreach sending', 'ok', 'OFF — nothing is sent to anybody');
+  }
+
   const { count } = await admin.from('crm_leads').select('*', { count: 'exact', head: true });
   record('Leads', count ? 'ok' : 'warn', `${count ?? 0} in the CRM`,
     count ? undefined : 'Import one: npm run sync:leads -- --file <export.json>');
@@ -311,7 +385,9 @@ async function checkRls(): Promise<void> {
     // Holds live Google refresh tokens; nothing but the service role may read it.
     'calendar_accounts', 'calendar_credentials',
     // Revenue records. Readable by members, writable by nobody.
-    'subscriptions', 'stripe_events'
+    'subscriptions', 'stripe_events',
+    // Who has opted out, and what was sent to whom.
+    'suppressions', 'outreach_messages', 'inbound_messages'
   ];
   for (const table of guarded) {
     const { data, error } = await anon.from(table).select('*').limit(1);

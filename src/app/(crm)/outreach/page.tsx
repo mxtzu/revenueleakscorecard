@@ -1,30 +1,54 @@
 /**
- * Outreach sequences — the message templates, and nothing that sends them.
+ * The outreach console.
  *
- * This page exists so the schema does not need re-cutting when the sending
- * engine is built: sequences, their ordered steps, the channel, the delay and
- * the templates are all editable here, and `lead_outreach` already records
- * enrolment state.
+ * This is the one page in the CRM that can cause a stranger to be contacted, so
+ * it is laid out around that fact rather than around the templates: the state
+ * of the sending switch comes first, then who is currently enrolled, then what
+ * actually went out, then who must never be written to again.
  *
- * What is deliberately absent, and why the page says so out loud: there is no
- * enrol button and no send. The original brief put the outreach engine on the
- * do-not-build list, and a "Start sequence" control that quietly did nothing —
- * or worse, quietly did something — is the wrong way to represent that.
- *
- * The one thing that already writes `lead_outreach` is the
- * `halt_outreach_on_inbound_reply` trigger. Enrolment state is therefore shown
- * read-only on the lead page rather than here.
+ * The send log includes refusals with their reasons. "Why did this lead never
+ * get step 3" is the question an outreach tool is most often asked, and a log
+ * that only records successes cannot answer it.
  */
 
 import { SequenceForm, StepForm } from '@/components/crm/entityForms';
-import { ActionError, DeleteForm, Disclosure, ReadOnlyNotice } from '@/components/crm/forms';
-import { Badge, Card, EmptyState, PageHeader } from '@/components/crm/ui';
+import {
+  ActionError,
+  ActionNotice,
+  DeleteForm,
+  Disclosure,
+  ReadOnlyNotice
+} from '@/components/crm/forms';
+import { Badge, Card, EmptyState, PageHeader, StatCard, Table } from '@/components/crm/ui';
+import {
+  EnrolmentRow,
+  MessageRow,
+  OutreachSettingsForm,
+  SendingStatus,
+  SuppressForm,
+  SuppressionRow
+} from '@/components/crm/outreachPanels';
 import { formatRelative, humanise } from '@/lib/crm/format';
 import { canWrite, isAdmin } from '@/lib/crm/permissions';
-import { listOutreachSequences, listOutreachSteps } from '@/lib/crm/queries';
+import { listLeads, listOutreachSequences, listOutreachSteps } from '@/lib/crm/queries';
 import { crmSession } from '@/lib/crm/server';
+import { isEmailConfigured, isSmsConfigured } from '@/lib/outreach/config';
+import {
+  getOutreachSettings,
+  listEnrolments,
+  listOutreachMessages,
+  listSuppressions,
+  sentTodayCount
+} from '@/lib/outreach/queries';
 
 import { removeSequence, removeStep, saveSequence, saveStep } from '../_actions/records';
+import {
+  runOutreachNow,
+  saveOutreachSettings,
+  setEnrolmentStatus,
+  suppressAddress,
+  unsuppressAddress
+} from '../_actions/outreach';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,16 +69,31 @@ function describeDelay(minutes: number): string {
 export default async function OutreachPage({
   searchParams
 }: {
-  searchParams?: { error?: string };
+  searchParams?: { error?: string; notice?: string };
 }) {
   const { client, profile } = await crmSession();
-  const [sequences, steps] = await Promise.all([
-    listOutreachSequences(client),
-    listOutreachSteps(client)
-  ]);
+  const [sequences, steps, settings, enrolments, messages, suppressions, leads, sentToday] =
+    await Promise.all([
+      listOutreachSequences(client),
+      listOutreachSteps(client),
+      getOutreachSettings(client),
+      listEnrolments(client),
+      listOutreachMessages(client, 100),
+      listSuppressions(client),
+      listLeads(client, { limit: 500 }),
+      sentTodayCount(client)
+    ]);
 
   const writable = canWrite(profile);
   const deletable = isAdmin(profile);
+  const admin = isAdmin(profile);
+
+  const leadName = new Map(
+    leads.map((lead) => [lead.id, lead.intelligence?.company_name ?? lead.external_lead_id])
+  );
+  const sequenceName = new Map(sequences.map((sequence) => [sequence.id, sequence.name]));
+  const liveEnrolments = enrolments.filter((row) => row.status === 'active');
+  const repliedCount = enrolments.filter((row) => row.status === 'replied').length;
 
   const stepsBySequence = new Map<string, typeof steps>();
   for (const step of steps) {
@@ -67,18 +106,117 @@ export default async function OutreachPage({
     <>
       <PageHeader
         eyebrow="Outreach"
-        title="Sequences"
-        description="Message templates and their order. Writing them here does not send them."
+        title="Outreach"
+        description="Sequences, who is enrolled, what went out, and who must not be contacted."
       />
 
       <ActionError message={searchParams?.error} />
+      <ActionNotice message={searchParams?.notice} />
 
-      <div className="mb-4 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-xs leading-relaxed text-amber-200/80">
-        Nothing on this page contacts anyone. There is no enrol button and no send — the sending
-        engine is deliberately not built. What is here is the structure a future engine would read:
-        sequences, ordered steps, channel, delay and templates. A lead&apos;s enrolment state, if
-        anything ever sets it, appears on that lead&apos;s own page.
+      <SendingStatus
+        settings={settings}
+        emailConfigured={isEmailConfigured()}
+        smsConfigured={isSmsConfigured()}
+        sentToday={sentToday}
+        isAdminUser={admin}
+        runAction={runOutreachNow}
+      />
+
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="Live enrolments" value={String(liveEnrolments.length)} />
+        <StatCard label="Sent today" value={String(sentToday)} />
+        <StatCard label="Replied" value={String(repliedCount)} hint="Sequence stopped itself" />
+        <StatCard
+          label="Do not contact"
+          value={String(suppressions.length)}
+          hint="Suppressed addresses"
+        />
       </div>
+
+      {admin && settings ? (
+        <Card className="mb-4">
+          <Disclosure summary="Sending settings" open={!settings.sending_enabled}>
+            <OutreachSettingsForm action={saveOutreachSettings} settings={settings} />
+          </Disclosure>
+        </Card>
+      ) : null}
+
+      <Card
+        title={`${enrolments.length} enrolment${enrolments.length === 1 ? '' : 's'}`}
+        description="A lead is enrolled by a person, from that lead's page."
+        className="mb-4"
+      >
+        {enrolments.length === 0 ? (
+          <EmptyState
+            title="Nobody is enrolled"
+            description="Open a lead and enrol it in a sequence."
+          />
+        ) : (
+          <Table head={['Lead', 'Sequence', 'Status', 'Step', 'Next', '']}>
+            {enrolments.map((enrolment) => (
+              <EnrolmentRow
+                key={enrolment.id}
+                enrolment={enrolment}
+                leadName={leadName.get(enrolment.crm_lead_id) ?? 'Unknown lead'}
+                sequenceName={sequenceName.get(enrolment.sequence_id) ?? 'Unknown sequence'}
+                writable={writable}
+                returnTo={HERE}
+                onSetStatus={setEnrolmentStatus}
+              />
+            ))}
+          </Table>
+        )}
+      </Card>
+
+      <Card
+        title="Send log"
+        description="Everything the engine sent, and everything it refused to send, with the reason."
+        className="mb-4"
+      >
+        {messages.length === 0 ? (
+          <EmptyState title="Nothing sent yet" />
+        ) : (
+          <Table head={['When', 'Lead', 'Channel', 'Step', 'Status', 'Detail']}>
+            {messages.map((entry) => (
+              <MessageRow
+                key={entry.id}
+                message={entry}
+                leadName={entry.crm_lead_id ? (leadName.get(entry.crm_lead_id) ?? '—') : '—'}
+              />
+            ))}
+          </Table>
+        )}
+      </Card>
+
+      <Card
+        title={`Do not contact (${suppressions.length})`}
+        description="Unsubscribes, bounces and spam complaints. Checked before every single send."
+        className="mb-4"
+      >
+        {writable ? (
+          <Disclosure summary="Add an address">
+            <SuppressForm action={suppressAddress} returnTo={HERE} />
+          </Disclosure>
+        ) : null}
+
+        {suppressions.length === 0 ? (
+          <p className="mt-3 text-xs text-white/35">Nobody has opted out.</p>
+        ) : (
+          <div className="mt-3">
+            <Table head={['Address', 'Reason', 'Source', 'Added', '']}>
+              {suppressions.map((entry) => (
+                <SuppressionRow
+                  key={entry.id}
+                  entry={entry}
+                  deletable={deletable}
+                  returnTo={HERE}
+                  onRemove={unsuppressAddress}
+                />
+              ))}
+            </Table>
+          </div>
+        )}
+      </Card>
 
       <Card className="mb-4">
         {writable ? (
