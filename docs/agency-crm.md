@@ -99,6 +99,9 @@ Environment variables, all three at Production scope:
 | `CALENDAR_TOKEN_KEY` | **server only** | Required to connect a calendar; encrypts stored OAuth tokens |
 | `CALENDAR_SYNC_SECRET` | server only | Optional; enables scheduled syncing |
 | `CALENDAR_WEBHOOK_SECRET` / `CALENDAR_WEBHOOK_URL` | server only | Optional; enables Google push notifications |
+| `STRIPE_SECRET_KEY` | **server only** | Optional; enables invoices and retainers |
+| `STRIPE_WEBHOOK_SECRET` | **server only** | Required with Stripe — without it nothing is ever marked paid |
+| `STRIPE_CURRENCY` | server only | Defaults to `gbp` |
 
 The service-role key must never be given a `NEXT_PUBLIC_` name — that compiles
 it into the browser bundle and hands every visitor full database access.
@@ -365,6 +368,92 @@ The only correct response is to discard the cursor and pull the window again;
 getting it wrong means a calendar that silently stops updating. That path is
 implemented and tested.
 
+### Stripe
+
+Optional. Left unconfigured the CRM records no billing and the payments page
+says so.
+
+**Setting it up.** Add `STRIPE_SECRET_KEY`, then in the Stripe dashboard add a
+webhook endpoint pointing at `https://<your-host>/api/crm/stripe/webhook` and
+put its signing secret in `STRIPE_WEBHOOK_SECRET`. Subscribe it to at least:
+
+```
+invoice.created  invoice.finalized  invoice.sent  invoice.paid
+invoice.payment_failed  invoice.marked_uncollectible  invoice.voided
+customer.subscription.created  customer.subscription.updated
+customer.subscription.deleted  charge.refunded
+```
+
+Use a test key until you mean it. The payments page shows which mode is in use.
+
+#### Stripe is the source of truth
+
+`payments` and `subscriptions` have a SELECT policy and **no INSERT, UPDATE or
+DELETE policy for any role — owner included**. That is not an oversight, it is
+the security model: nothing a browser can send marks an invoice paid. The only
+writer is the webhook handler, running server-side as the service role after
+Stripe's signature has been verified. There is a schema assertion that an owner
+attempting `update payments set status = 'paid'` changes nothing.
+
+What the UI *can* do is ask Stripe for something — draft an invoice, finalise
+it, email it, void it, start or cancel a retainer. Those are API calls, and the
+row that results is written from Stripe's own response through the same
+`recordInvoice` the webhook uses. No CRM row is ever built from a form field.
+Recording eagerly is not a shortcut past the webhook; the webhook still arrives
+and is still authoritative. It exists so pressing "create invoice" shows you an
+invoice instead of an empty table.
+
+If an invoice stays on pending after a client has paid, the webhook is not
+being delivered. That is a Stripe dashboard problem, not a missing button.
+
+#### Webhooks are not a queue
+
+Three failure modes, all handled and all tested:
+
+- **Replays.** Stripe re-delivers on any non-2xx and on its own schedule.
+  `stripe_events` is an idempotency ledger keyed on the event id; the insert
+  *is* the lock, so two concurrent deliveries race on the primary key rather
+  than both winning. No payloads are stored — they would be the most sensitive
+  data in the database, for debugging value the Stripe dashboard already gives.
+- **Out-of-order delivery.** `invoice.paid` can arrive before
+  `invoice.finalized`. Every mirrored row carries the `created` time of the last
+  event applied, and an older event is ignored rather than rolling a settled
+  invoice back to open.
+- **Unknown customers.** An invoice raised in the Stripe dashboard for someone
+  who is not a CRM client is still recorded, with a null `client_id`. Money that
+  exists but is invisible is worse than money that is unattributed.
+
+The route returns 400 for an unverifiable request (never retried) and 500 for a
+genuine event that failed while being applied (so Stripe brings it back).
+Returning 200 on failure would lose the event silently.
+
+#### Money
+
+Stripe counts in the smallest unit of the currency: `1500` is £15.00 in GBP and
+¥1500 in JPY. `src/lib/billing/money.ts` owns that conversion, including the
+zero-decimal currency list and two floating-point traps that each cost real
+money — `Math.trunc(19.99 * 100)` undercharging by a penny, and
+`Math.round(1.005 * 100)` losing a half penny downwards.
+
+MRR normalises every interval to a month, so a £12,000 yearly plan counts as
+£1,000 and not £12,000. `past_due` is included: the client has not cancelled and
+the money is still expected, and excluding it makes MRR jump every time a card
+is retried. Collected is net of refunds — a refunded invoice is still `paid` at
+Stripe, so reading only the status would keep counting money that went back.
+
+#### Nothing is emailed unless you say so
+
+Drafting an invoice does not send it, and finalising does not either —
+finalising gives it a number and a payment link. "Email it to the client" is a
+separate, explicit control, and it is the only thing in this CRM that sends a
+message to anybody. Starting a retainer is the one standing exception: Stripe
+raises and emails an invoice each cycle, which is what a retainer is, and the
+form says so before you press it.
+
+Cancelling a retainer ends it at the period boundary by default. Immediate
+cancellation takes away service the client has already paid for, so it is the
+explicit choice.
+
 ### Documents
 
 Files live in a **private** Supabase Storage bucket (`crm-documents`), created by
@@ -426,7 +515,7 @@ Put in triggers rather than application code, so it holds no matter which client
 | `/outreach` | Sequence and step templates. Writes templates only — nothing sends |
 | `/clients` | Accounts; create |
 | `/clients/[id]` | Account edit, contracts, documents, payments, notes, tasks |
-| `/payments` | All invoices, read-only |
+| `/payments` | MRR, collected, outstanding and overdue; invoices and retainers, with Stripe controls |
 
 Every one is a server component reading through the session-scoped client, so RLS applies
 to the page as well as to the API.
@@ -438,12 +527,12 @@ to the page as well as to the API.
 Present in the schema so the data model does not need re-cutting later, but with no
 implementation and no UI:
 
-cold email sending · SMS · automated calling · voicemail drops · Stripe payment
-processing · AI transcription · AI meeting summaries · client portal · advanced
-analytics · an automated outreach engine.
+cold email sending · SMS · automated calling · voicemail drops · AI transcription ·
+AI meeting summaries · client portal · advanced analytics · an automated outreach
+engine.
 
-Google Calendar and Meet were on this list until Sprint 4 and are now built;
-everything else above is still schema only.
+Google Calendar and Meet were on this list until Sprint 4, and Stripe until
+Sprint 5; those are now built. Everything else above is still schema only.
 
 The CRM records that a call happened; it does not place one. Nothing in it sends a message
 to a lead.
@@ -496,4 +585,16 @@ conflict resolution, cancellation handling and the 410 full-resync path. There
 is no live Google account in CI, so the request the code builds is what gets
 asserted.
 
-Run all three after any migration change.
+`supabase/tests/payments_test.sql` proves the rule the whole billing sprint
+rests on: an owner — the most privileged role there is — reading an invoice,
+then attempting to mark it paid, and the row not changing. It also covers the
+unique indexes that make a webhook replay harmless, and that deleting a retainer
+unlinks its invoices rather than destroying them.
+
+The Stripe integration is covered by unit tests against the real SDK with the
+socket replaced (`src/lib/billing/__tests__/`): money conversion, invoice and
+subscription mapping, the idempotency ledger, out-of-order events, refunds, and
+webhook signatures — including a tampered payload, a wrong secret and an
+expired timestamp, all verified with Stripe's own signer and verifier.
+
+Run all four after any migration change.

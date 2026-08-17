@@ -1,95 +1,156 @@
 /**
- * Payments — every invoice the CRM knows about.
+ * Payments — the money dashboard.
  *
- * Entirely read-only, and that is a security property, not a missing feature.
- * `payments` has a SELECT policy and no INSERT/UPDATE policy, so even a
- * hand-crafted request from a signed-in user cannot mark an invoice paid. The
- * only writer will be the Stripe webhook, running server-side with the service
- * role, reacting to events Stripe signed.
+ * Invoices and subscriptions, with totals that are worth quoting: collected is
+ * net of refunds, outstanding includes overdue, and MRR normalises every
+ * billing interval to a month.
+ *
+ * The status column is read-only, and that is a security property rather than
+ * a missing feature. `payments` and `subscriptions` have a SELECT policy and
+ * no INSERT or UPDATE policy, so nothing a browser can send marks an invoice
+ * paid. The only writer is the Stripe webhook, running server-side with the
+ * service role, reacting to events Stripe signed. The controls on this page
+ * ask Stripe to do something; they never assert an outcome.
  */
 
-import Link from 'next/link';
+import {
+  BillingModeNotice,
+  InvoiceRow,
+  SubscriptionRow
+} from '@/components/crm/billing';
+import { ActionError, ActionNotice } from '@/components/crm/forms';
+import { Card, EmptyState, PageHeader, StatCard, Table } from '@/components/crm/ui';
+import { isLiveMode, isStripeConfigured, isWebhookConfigured } from '@/lib/billing/client';
+import { billingTotals, listSubscriptions } from '@/lib/billing/queries';
+import { formatMoney } from '@/lib/crm/format';
+import { canWrite } from '@/lib/crm/permissions';
+import { listClients, listPayments } from '@/lib/crm/queries';
+import { crmSession } from '@/lib/crm/server';
 
-import { Badge, Card, Cell, EmptyState, PageHeader, Row, StatCard, Table } from '@/components/crm/ui';
-import { formatDate, formatDateTime, formatMoney, humanise, orDash } from '@/lib/crm/format';
-import { listPayments } from '@/lib/crm/queries';
-import { crmClient } from '@/lib/crm/server';
-import type { PaymentStatus } from '@/lib/crm/types';
+import { cancelInvoice, emailInvoice, endSubscription, issueInvoice, keepSubscription } from '../_actions/billing';
 
 export const dynamic = 'force-dynamic';
 
-const TONE: Record<PaymentStatus, 'neutral' | 'positive' | 'warning' | 'danger'> = {
-  pending: 'neutral',
-  paid: 'positive',
-  failed: 'danger',
-  overdue: 'danger',
-  refunded: 'warning',
-  cancelled: 'neutral'
-};
+export default async function PaymentsPage({
+  searchParams
+}: {
+  searchParams?: { error?: string; notice?: string };
+}) {
+  const { client, profile } = await crmSession();
+  const [payments, subscriptions, clients] = await Promise.all([
+    listPayments(client, 300),
+    listSubscriptions(client, 200),
+    listClients(client)
+  ]);
 
-export default async function PaymentsPage() {
-  const payments = await listPayments(crmClient(), 300);
-  const currency = payments[0]?.currency ?? 'GBP';
+  const writable = canWrite(profile);
+  const totals = billingTotals(payments, subscriptions);
+  const nameOf = new Map(clients.map((account) => [account.id, account.company_name]));
 
-  const sum = (status: PaymentStatus[]) =>
-    payments
-      .filter((payment) => status.includes(payment.status))
-      .reduce((total, payment) => total + Number(payment.amount), 0);
+  const live = subscriptions.filter((subscription) =>
+    ['active', 'trialing', 'past_due'].includes(subscription.status)
+  );
 
   return (
     <>
       <PageHeader
         eyebrow="Finance"
         title="Payments"
-        description="Invoice records. Status is set by Stripe, never from this screen."
+        description="Invoices and retainers. Status comes from Stripe and cannot be set here."
+      />
+
+      <ActionError message={searchParams?.error} />
+      <ActionNotice message={searchParams?.notice} />
+
+      <BillingModeNotice
+        configured={isStripeConfigured()}
+        webhookConfigured={isWebhookConfigured()}
+        liveMode={isLiveMode()}
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Collected" value={formatMoney(sum(['paid']), currency)} />
-        <StatCard label="Pending" value={formatMoney(sum(['pending']), currency)} />
-        <StatCard label="Overdue" value={formatMoney(sum(['overdue']), currency)} />
-        <StatCard label="Failed" value={formatMoney(sum(['failed']), currency)} />
+        <StatCard
+          label="MRR"
+          value={formatMoney(totals.mrr, totals.currency)}
+          hint={`${live.length} live retainer${live.length === 1 ? '' : 's'}`}
+        />
+        <StatCard
+          label="Collected this month"
+          value={formatMoney(totals.collectedThisMonth, totals.currency)}
+          hint="Net of refunds"
+        />
+        <StatCard
+          label="Outstanding"
+          value={formatMoney(totals.outstanding, totals.currency)}
+          hint="Issued and unpaid"
+        />
+        <StatCard
+          label="Overdue"
+          value={formatMoney(totals.overdue, totals.currency)}
+          hint="Past the due date"
+        />
       </div>
 
-      <Card title={`${payments.length} payment${payments.length === 1 ? '' : 's'}`}>
-        {payments.length === 0 ? (
+      <Card
+        title={`${subscriptions.length} retainer${subscriptions.length === 1 ? '' : 's'}`}
+        className="mb-4"
+      >
+        {subscriptions.length === 0 ? (
           <EmptyState
-            title="No payments recorded"
-            description="Stripe processing is not part of this build. Rows appear here once the webhook is connected."
+            title="No retainers"
+            description="Start one from a client's page once the deal is signed."
           />
         ) : (
-          <Table head={['Amount', 'Status', 'Client', 'Due', 'Paid', 'Stripe invoice']}>
-            {payments.map((payment) => (
-              <Row key={payment.id}>
-                <Cell className="font-mono text-white/85">
-                  {formatMoney(payment.amount, payment.currency)}
-                </Cell>
-                <Cell>
-                  <Badge tone={TONE[payment.status]}>{humanise(payment.status)}</Badge>
-                </Cell>
-                <Cell>
-                  {payment.client_id ? (
-                    <Link
-                      href={`/clients/${payment.client_id}`}
-                      className="text-electric-300 hover:underline"
-                    >
-                      View client
-                    </Link>
-                  ) : (
-                    <span className="text-white/30">—</span>
-                  )}
-                </Cell>
-                <Cell className="whitespace-nowrap text-white/50">{formatDate(payment.due_at)}</Cell>
-                <Cell className="whitespace-nowrap text-white/50">
-                  {formatDateTime(payment.paid_at)}
-                </Cell>
-                <Cell className="font-mono text-xs text-white/30">
-                  {orDash(payment.stripe_invoice_id)}
-                </Cell>
-              </Row>
+          <Table head={['Client', 'What for', 'Amount', 'Status', 'Renews', '']}>
+            {subscriptions.map((subscription) => (
+              <SubscriptionRow
+                key={subscription.id}
+                subscription={subscription}
+                clientName={subscription.client_id ? nameOf.get(subscription.client_id) : null}
+                writable={writable}
+                returnTo="/payments"
+                onCancel={endSubscription}
+                onKeep={keepSubscription}
+              />
             ))}
           </Table>
         )}
+      </Card>
+
+      <Card title={`${payments.length} invoice${payments.length === 1 ? '' : 's'}`}>
+        {payments.length === 0 ? (
+          <EmptyState
+            title="No invoices"
+            description={
+              isStripeConfigured()
+                ? 'Raise one from a client’s page. Invoices created in Stripe directly appear here too, once the webhook delivers them.'
+                : 'Stripe is not configured on this deployment.'
+            }
+          />
+        ) : (
+          <Table head={['Invoice', 'Client', 'Amount', 'Status', 'Due', 'Paid', '']}>
+            {payments.map((payment) => (
+              <InvoiceRow
+                key={payment.id}
+                payment={payment}
+                clientName={payment.client_id ? nameOf.get(payment.client_id) : null}
+                writable={writable}
+                returnTo="/payments"
+                onIssue={issueInvoice}
+                onEmail={emailInvoice}
+                onVoid={cancelInvoice}
+              />
+            ))}
+          </Table>
+        )}
+
+        <p className="mt-4 border-t border-line-soft pt-3 text-xs leading-relaxed text-white/35">
+          Nothing on this page can mark an invoice paid. The database has no write policy on{' '}
+          <span className="font-mono">payments</span> for any role — status arrives from Stripe by
+          webhook. An invoice stuck on pending after a client has paid means the webhook is not
+          being delivered, not that the control is missing — check the webhook log in the Stripe
+          dashboard.
+        </p>
       </Card>
     </>
   );

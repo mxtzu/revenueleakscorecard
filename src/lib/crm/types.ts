@@ -405,6 +405,11 @@ export interface Client {
   renewal_date: IsoDate | null;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
+
+  // Stripe billing (20260820_payments.sql).
+  /** Unique: two accounts sharing one Stripe customer make invoices ambiguous. */
+  stripe_customer_id: string | null;
+  billing_email: string | null;
 }
 
 export interface Contract {
@@ -436,6 +441,26 @@ export interface Payment {
   paid_at: IsoTimestamp | null;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
+
+  // Stripe billing (20260820_payments.sql). Written only by the webhook.
+  subscription_id: Uuid | null;
+  stripe_charge_id: string | null;
+  /** Stripe's own invoice status, verbatim. `status` is the CRM reading of it. */
+  stripe_status: string | null;
+  invoice_number: string | null;
+  description: string | null;
+  /** Minted by Stripe. Never constructed here — a guessed URL is a broken one. */
+  hosted_invoice_url: string | null;
+  invoice_pdf_url: string | null;
+  period_start: IsoTimestamp | null;
+  period_end: IsoTimestamp | null;
+  amount_due: number | null;
+  amount_paid: number | null;
+  amount_refunded: number;
+  attempt_count: number;
+  failure_reason: string | null;
+  voided_at: IsoTimestamp | null;
+  last_event_at: IsoTimestamp | null;
 }
 
 export interface Note {

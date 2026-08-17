@@ -91,6 +91,7 @@ function checkConfig(): void {
   }
 
   checkCalendarConfig();
+  checkStripeConfig();
 
   if (process.env.GITHUB_PAGES === 'true') {
     record('Build target', 'fail', 'GITHUB_PAGES=true forces a static export',
@@ -162,6 +163,51 @@ function checkCalendarConfig(): void {
   );
 }
 
+/**
+ * Stripe is optional, so an unconfigured deployment is a warning, not a
+ * failure. Two things do fail.
+ *
+ * A secret key with no webhook secret: invoices can be raised but nothing will
+ * ever move to paid, because the frontend is not permitted to set payment
+ * status. That looks like a broken product and is really a missing endpoint.
+ *
+ * A live key on a deployment that also has the test-mode marks of one — worth
+ * saying out loud, because the difference between sk_test_ and sk_live_ is
+ * eight characters and real money.
+ */
+function checkStripeConfig(): void {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) {
+    record('Stripe', 'warn', 'Not configured — no billing is recorded',
+      'Optional. Set STRIPE_SECRET_KEY to enable invoices and retainers.');
+    return;
+  }
+
+  const live = key.startsWith('sk_live_');
+  record('Stripe', live ? 'ok' : 'ok', live ? 'Live mode' : 'Test mode',
+    live ? 'Real money. Check the webhook endpoint points at this deployment.' : undefined);
+
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    record('Stripe webhook', 'fail', 'STRIPE_WEBHOOK_SECRET is not set',
+      'Nothing will ever be marked paid: the frontend cannot set payment status, so the ' +
+        'webhook is the only writer. Add the endpoint in the Stripe dashboard and set the secret.');
+  } else if (!process.env.STRIPE_WEBHOOK_SECRET.startsWith('whsec_')) {
+    record('Stripe webhook', 'warn', 'STRIPE_WEBHOOK_SECRET does not look like a signing secret',
+      'It should start with whsec_. The endpoint secret is not the API key.');
+  } else {
+    record('Stripe webhook', 'ok', 'Signing secret set');
+  }
+
+  // Same trap as every other secret here.
+  const leaked = Object.keys(process.env).filter(
+    (name) => name.startsWith('NEXT_PUBLIC_') && /STRIPE_SECRET|STRIPE_WEBHOOK/.test(name)
+  );
+  if (leaked.length) {
+    record('Stripe key exposure', 'fail', `Compiled into the browser: ${leaked.join(', ')}`,
+      'Rotate them immediately and rename without the NEXT_PUBLIC_ prefix.');
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Connectivity and schema
 // ---------------------------------------------------------------------------
@@ -170,7 +216,8 @@ const CRM_TABLES = [
   'outreach_sequences', 'outreach_steps', 'lead_outreach', 'tasks', 'appointments',
   'opportunities', 'proposals', 'clients', 'contracts', 'payments', 'notes',
   'documents', 'pipeline_stage_history',
-  'calendar_accounts', 'calendar_credentials', 'calendar_deletions'
+  'calendar_accounts', 'calendar_credentials', 'calendar_deletions',
+  'subscriptions', 'stripe_events'
 ];
 
 async function checkDatabase(): Promise<void> {
@@ -262,7 +309,9 @@ async function checkRls(): Promise<void> {
   const guarded = [
     'crm_leads', 'lead_intelligence', 'clients', 'payments', 'profiles',
     // Holds live Google refresh tokens; nothing but the service role may read it.
-    'calendar_accounts', 'calendar_credentials'
+    'calendar_accounts', 'calendar_credentials',
+    // Revenue records. Readable by members, writable by nobody.
+    'subscriptions', 'stripe_events'
   ];
   for (const table of guarded) {
     const { data, error } = await anon.from(table).select('*').limit(1);

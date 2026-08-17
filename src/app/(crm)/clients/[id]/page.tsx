@@ -29,7 +29,13 @@ import {
   NoteForm,
   TaskForm
 } from '@/components/crm/entityForms';
-import { ActionError, DeleteForm, Disclosure, ReadOnlyNotice } from '@/components/crm/forms';
+import {
+  ActionError,
+  ActionNotice,
+  DeleteForm,
+  Disclosure,
+  ReadOnlyNotice
+} from '@/components/crm/forms';
 import {
   formatDate,
   formatDateTime,
@@ -50,9 +56,28 @@ import {
   listPaymentsForClient
 } from '@/lib/crm/queries';
 import { crmSession } from '@/lib/crm/server';
-import type { ClientStatus, PaymentStatus } from '@/lib/crm/types';
+import type { ClientStatus } from '@/lib/crm/types';
+
+import {
+  InvoiceForm,
+  InvoiceRow,
+  SubscriptionForm,
+  SubscriptionRow
+} from '@/components/crm/billing';
+import { isStripeConfigured } from '@/lib/billing/client';
+import { listSubscriptionsForClient } from '@/lib/billing/queries';
 
 import { removeClient, removeNote, saveClient, saveNote, saveTask } from '../../_actions/crud';
+import {
+  cancelInvoice,
+  draftInvoice,
+  emailInvoice,
+  endSubscription,
+  issueInvoice,
+  keepSubscription,
+  resyncBilling,
+  startSubscription
+} from '../../_actions/billing';
 import {
   removeContract,
   removeDocument,
@@ -70,33 +95,26 @@ const CLIENT_TONE: Record<ClientStatus, 'neutral' | 'positive' | 'warning' | 'da
   churned: 'danger'
 };
 
-const PAYMENT_TONE: Record<PaymentStatus, 'neutral' | 'positive' | 'warning' | 'danger'> = {
-  pending: 'neutral',
-  paid: 'positive',
-  failed: 'danger',
-  overdue: 'danger',
-  refunded: 'warning',
-  cancelled: 'neutral'
-};
-
 export default async function ClientDetailPage({
   params,
   searchParams
 }: {
   params: { id: string };
-  searchParams?: { error?: string };
+  searchParams?: { error?: string; notice?: string };
 }) {
   const { client: supabase, profile } = await crmSession();
   const account = await getClientById(supabase, params.id);
   if (!account) notFound();
 
-  const [contracts, payments, activities, notes, documents, team] = await Promise.all([
+  const [contracts, payments, activities, notes, documents, team, subscriptions] =
+    await Promise.all([
     listContractsForClient(supabase, account.id),
     listPaymentsForClient(supabase, account.id),
     listActivitiesForClient(supabase, account.id),
     listNotesForClient(supabase, account.id),
     listDocumentsForClient(supabase, account.id),
-    listAssignableProfiles(supabase)
+    listAssignableProfiles(supabase),
+    listSubscriptionsForClient(supabase, account.id)
   ]);
 
   const here = `/clients/${params.id}`;
@@ -124,6 +142,7 @@ export default async function ClientDetailPage({
       />
 
       <ActionError message={searchParams?.error} />
+      <ActionNotice message={searchParams?.notice} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card title="Account">
@@ -352,30 +371,89 @@ export default async function ClientDetailPage({
         </Card>
 
         <Card
-          title="Payments"
-          description="Read-only. Stripe decides what is paid; the CRM records it."
+          title="Billing"
+          description="Invoices and retainers. Status comes from Stripe; nothing here can set it."
           className="xl:col-span-2"
         >
-          {payments.length === 0 ? (
-            <EmptyState title="No payments recorded" />
+          {!isStripeConfigured() ? (
+            <p className="mb-4 rounded-lg border border-line-soft bg-white/[0.02] px-3 py-2 text-xs text-white/45">
+              Stripe is not configured on this deployment, so invoices cannot be raised from here.
+            </p>
+          ) : writable ? (
+            <div className="mb-4 space-y-2">
+              <Disclosure summary="Raise an invoice" tone="primary">
+                <InvoiceForm
+                  action={draftInvoice}
+                  clientId={account.id}
+                  returnTo={here}
+                  defaultAmount={contracts[0]?.monthly_value ?? null}
+                />
+              </Disclosure>
+              <Disclosure summary="Start a recurring retainer">
+                <SubscriptionForm
+                  action={startSubscription}
+                  clientId={account.id}
+                  returnTo={here}
+                  defaultAmount={contracts[0]?.monthly_value ?? null}
+                  contracts={contracts.map((contract) => ({
+                    value: contract.id,
+                    label: `${humanise(contract.status)} — ${formatMoney(contract.monthly_value, currency)}/mo`
+                  }))}
+                />
+              </Disclosure>
+              {account.stripe_customer_id ? (
+                <form action={resyncBilling}>
+                  <input type="hidden" name="client_id" value={account.id} />
+                  <input type="hidden" name="return_to" value={here} />
+                  {/* For history predating the webhook, and events missed while
+                      a deployment was down. */}
+                  <button
+                    type="submit"
+                    className="text-xs text-white/40 hover:text-white/70"
+                  >
+                    Re-read this client from Stripe
+                  </button>
+                </form>
+              ) : null}
+            </div>
           ) : (
-            <Table head={['Amount', 'Status', 'Due', 'Paid', 'Stripe invoice']}>
+            <ReadOnlyNotice what="raise invoices" />
+          )}
+
+          {subscriptions.length > 0 ? (
+            <div className="mb-4">
+              <p className="label-mono mb-2 text-white/35">Retainers</p>
+              <Table head={['Client', 'What for', 'Amount', 'Status', 'Renews', '']}>
+                {subscriptions.map((subscription) => (
+                  <SubscriptionRow
+                    key={subscription.id}
+                    subscription={subscription}
+                    clientName={account.company_name}
+                    writable={writable}
+                    returnTo={here}
+                    onCancel={endSubscription}
+                    onKeep={keepSubscription}
+                  />
+                ))}
+              </Table>
+            </div>
+          ) : null}
+
+          {payments.length === 0 ? (
+            <EmptyState title="No invoices yet" />
+          ) : (
+            <Table head={['Invoice', 'Client', 'Amount', 'Status', 'Due', 'Paid', '']}>
               {payments.map((payment) => (
-                <Row key={payment.id}>
-                  <Cell className="font-mono text-white/85">
-                    {formatMoney(payment.amount, payment.currency)}
-                  </Cell>
-                  <Cell>
-                    <Badge tone={PAYMENT_TONE[payment.status]}>{humanise(payment.status)}</Badge>
-                  </Cell>
-                  <Cell className="whitespace-nowrap text-white/50">{formatDate(payment.due_at)}</Cell>
-                  <Cell className="whitespace-nowrap text-white/50">
-                    {formatDateTime(payment.paid_at)}
-                  </Cell>
-                  <Cell className="font-mono text-xs text-white/30">
-                    {orDash(payment.stripe_invoice_id)}
-                  </Cell>
-                </Row>
+                <InvoiceRow
+                  key={payment.id}
+                  payment={payment}
+                  clientName={account.company_name}
+                  writable={writable}
+                  returnTo={here}
+                  onIssue={issueInvoice}
+                  onEmail={emailInvoice}
+                  onVoid={cancelInvoice}
+                />
               ))}
             </Table>
           )}
