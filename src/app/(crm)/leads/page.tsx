@@ -22,7 +22,7 @@ import {
 } from '@/components/crm/ui';
 import { formatRelative, orDash } from '@/lib/crm/format';
 import { listLeads } from '@/lib/crm/queries';
-import { crmClient } from '@/lib/crm/server';
+import { crmSession } from '@/lib/crm/server';
 import { PIPELINE_STAGES, PIPELINE_STAGE_LABELS, isPipelineStage } from '@/lib/crm/types';
 
 export const dynamic = 'force-dynamic';
@@ -34,12 +34,14 @@ interface SearchParams {
 }
 
 export default async function LeadsPage({ searchParams }: { searchParams?: SearchParams }) {
+  const { client, profile } = await crmSession();
   const stage = isPipelineStage(searchParams?.stage) ? searchParams.stage : undefined;
   const search = searchParams?.q?.trim() || undefined;
   const parsedScore = Number(searchParams?.min_score);
   const minScore = Number.isFinite(parsedScore) && parsedScore > 0 ? parsedScore : undefined;
 
-  const leads = await listLeads(crmClient(), { stage, search, minScore, limit: 200 });
+  const leads = await listLeads(client, { stage, search, minScore, limit: 200 });
+  const canWrite = profile?.role === 'owner' || profile?.role === 'admin' || profile?.role === 'sales' || profile?.role === 'account_manager';
 
   return (
     <>
@@ -47,7 +49,7 @@ export default async function LeadsPage({ searchParams }: { searchParams?: Searc
         eyebrow="Research"
         title="Leads"
         description="Businesses discovered and scored by the lead pipeline. Sales state lives here; the underlying research is a read-only snapshot."
-        actions={<ImportLeads />}
+        actions={canWrite ? <ImportLeads /> : undefined}
       />
 
       <Card className="mb-4">
