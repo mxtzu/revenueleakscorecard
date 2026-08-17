@@ -4,7 +4,6 @@ import {
   createAppointment,
   createContact,
   createNote,
-  createOpportunity,
   createTask,
   noteText,
   setTaskStatus,
@@ -163,7 +162,7 @@ describe('opportunity outcome stamps', () => {
 
   it('stamps won_at on a won deal and leaves lost_at null', async () => {
     const recorder = new RecordingClient([{ id: 'o1' }]);
-    await createOpportunity(recorder.client(), opportunityInput('won'));
+    await updateOpportunity(recorder.client(), 'o1', opportunityInput('won'));
 
     const payload = recorder.last.payload as { won_at: string | null; lost_at: string | null };
     expect(payload.won_at).toMatch(/^\d{4}/);

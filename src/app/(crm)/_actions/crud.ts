@@ -25,7 +25,6 @@ import {
   createClient,
   createContact,
   createNote,
-  createOpportunity,
   createTask,
   deleteAppointment,
   deleteClient,
@@ -43,6 +42,7 @@ import {
   updateTask
 } from '@/lib/crm/mutations';
 import { requireAdmin, requireWriter } from '@/lib/crm/server';
+import { convertLeadToOpportunity } from '@/lib/crm/workflow';
 import {
   APPOINTMENT_STATUSES,
   CLIENT_STATUSES,
@@ -301,14 +301,32 @@ function opportunityFields(form: FormData) {
   };
 }
 
+/**
+ * Editing a deal is a plain update; creating one is a transition.
+ *
+ * A new opportunity means the lead is now a live deal, so the lead's stage and
+ * timeline have to move with it. That is three tables, so creation goes
+ * through `crm_convert_lead_to_opportunity` — the same transaction the lead
+ * page's convert form uses. Two creation paths with different side effects is
+ * how a board ends up disagreeing with the forecast.
+ */
 export async function saveOpportunity(form: FormData) {
   const fallback = '/opportunities';
   try {
-    const { client } = await requireWriter();
+    const { client, userId } = await requireWriter();
     const id = optionalUuid(form, 'id');
     const fields = opportunityFields(form);
-    if (id) await updateOpportunity(client, id, fields);
-    else await createOpportunity(client, fields);
+    if (id) {
+      await updateOpportunity(client, id, fields);
+    } else {
+      const { loss_reason: _unused, ...deal } = fields;
+      await convertLeadToOpportunity(client, {
+        ...deal,
+        owner_id: deal.owner_id ?? userId,
+        next_action_at: optionalTimestamp(form, 'next_action_at', 'Next action'),
+        note: optionalText(form, 'note')
+      });
+    }
     refresh([...OPPORTUNITY_PAGES, `/leads/${fields.crm_lead_id}`]);
   } catch (error) {
     back(form, fallback, error);

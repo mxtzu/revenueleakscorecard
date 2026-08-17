@@ -202,6 +202,62 @@ Wall-clock times entered in a form are interpreted in `Europe/London` unless the
 record carries its own zone, as appointments do. The offset is looked up rather
 than assumed: 14:00 in London is 14:00Z in January and 13:00Z in June.
 
+### The sales workflow
+
+Five transitions move a deal, and each one touches several tables at once:
+
+| Action | Writes |
+| --- | --- |
+| Lead → Opportunity | `opportunities` + `crm_leads.pipeline_stage` + `activities` |
+| Log a call | `activities` + `crm_leads.next_action` + `opportunities.next_action` + `tasks` |
+| Proposal sent | `proposals` + `opportunities` + `crm_leads` + `activities` |
+| Won → Client | `opportunities` + `clients` + `contracts` + `crm_leads` + `activities` |
+| Lost | `opportunities` + `crm_leads` + `activities` |
+
+**PostgREST cannot send a transaction.** Four sequential REST calls can fail
+halfway and leave a won opportunity with no client, or a client whose lead is
+still sitting in `sales_call`. So each transition is a single plpgsql function
+in `20260818_sales_workflow.sql`, called through one `rpc()`
+(`src/lib/crm/workflow.ts`) — it either happens completely or not at all.
+
+Those functions are **SECURITY INVOKER**, so every statement inside is still
+checked by the same RLS policies a direct write would hit. The transaction buys
+atomicity, not privilege. As DEFINER they would hand every signed-in user the
+ability to create clients.
+
+Rules the database enforces, rather than the form:
+
+- **Stages only move forward.** `crm_stage_rank()` ranks the ladder explicitly
+  — the enum's own order would put `lost` above `won`. A late-logged discovery
+  call cannot drag a lead back out of `negotiation`, and a closed lead is never
+  silently reopened.
+- **A lost deal needs a reason.** "Lost" with no reason is the least useful row
+  a CRM can hold.
+- **A lead with another live deal stays open** when one of its deals is lost.
+- **A deal that already became a client cannot be marked lost** — that would
+  leave the account with nothing behind it. It raises and says to cancel the
+  client instead.
+- **Winning twice returns the same client.** Double-submitting the form is safe.
+- Workflow bookkeeping is logged as `direction = 'internal'`, so it cannot trip
+  `halt_outreach_on_inbound_reply` and claim the lead replied. Marking a
+  proposal sent logs `outbound`, because a document really did go out.
+
+Creating an opportunity from `/opportunities` goes through the same transaction
+as converting from a lead page. Two creation paths with different side effects
+is how a board ends up disagreeing with the forecast, so there is no plain
+`createOpportunity` in `mutations.ts` at all.
+
+**Nothing here sends anything.** "Proposal sent" records that a human sent a
+document; the CRM does not deliver it.
+
+### The sales call workspace
+
+`/leads/[id]/call` is a page to have the call from. The pipeline's findings are
+on the left, arranged as things to say — strengths first, then the gaps that
+are costing them money — and the notes, outcome and follow-up are on the right
+in one form that saves as one transaction. Notes saved without the follow-up is
+the exact failure a follow-up exists to prevent.
+
 ### Documents
 
 Files live in a **private** Supabase Storage bucket (`crm-documents`), created by
@@ -255,10 +311,11 @@ Put in triggers rather than application code, so it holds no matter which client
 | `/dashboard` | Today's tasks, upcoming appointments, weighted pipeline, recent leads |
 | `/leads` | Filterable list — stage, minimum score, company-name search |
 | `/leads/[id]` | CRM state, intelligence, timeline + CRUD for contacts, tasks, appointments, opportunities, notes |
+| `/leads/[id]/call` | Sales call workspace — talking points, call notes, follow-up and task in one save |
 | `/pipeline` | Board, one column per active stage |
 | `/tasks` | Open tasks grouped by urgency; create, edit, complete, reopen, delete |
 | `/calendar` | Appointments by day; book, edit, change status, delete |
-| `/opportunities` | Deals with value totals; create, edit, delete, convert a won deal to a client, manage proposals |
+| `/opportunities` | Deals with value totals; create, edit, delete, manage proposals, mark sent, win into a client, mark lost |
 | `/outreach` | Sequence and step templates. Writes templates only — nothing sends |
 | `/clients` | Accounts; create |
 | `/clients/[id]` | Account edit, contracts, documents, payments, notes, tasks |
@@ -301,8 +358,17 @@ npm run doctor      # configuration, schema and RLS against a live project
 CRM_TEST_DATABASE_URL=postgres://postgres@localhost:5432/postgres npm run db:test
 ```
 
-`supabase/tests/crm_schema_test.sql` runs 93 assertions covering structure, indexes on
-every foreign key, trigger behaviour, cascade rules, and RLS enforced under actual role
-impersonation — including that a viewer's INSERT is rejected and an anonymous request sees
-nothing. It found two genuine schema bugs while being written; run it after any migration
-change.
+`supabase/tests/crm_schema_test.sql` covers structure, indexes on every foreign key,
+trigger behaviour, cascade rules, and RLS enforced under actual role impersonation —
+including that a viewer's INSERT is rejected and an anonymous request sees nothing. It
+found two genuine schema bugs while being written.
+
+`supabase/tests/sales_workflow_test.sql` covers the transition functions, all of it
+under an impersonated `authenticated` role because the functions are SECURITY INVOKER
+and running them as superuser would test something the application never does. It
+asserts forward-only stage movement, idempotent winning, the refusals, that a failed
+conversion leaves nothing behind, that a viewer is refused with
+`insufficient_privilege`, that `anon` holds no EXECUTE, and that none of the functions
+is SECURITY DEFINER.
+
+Run both after any migration change.

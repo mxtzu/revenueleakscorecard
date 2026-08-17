@@ -265,17 +265,14 @@ function outcomeStamps(stage: OpportunityStage, existing?: Opportunity | null) {
   };
 }
 
-export async function createOpportunity(
-  client: CrmSupabaseClient,
-  input: OpportunityInput
-): Promise<Opportunity> {
-  const result = await client
-    .from('opportunities')
-    .insert({ ...input, ...outcomeStamps(input.stage) })
-    .select()
-    .single();
-  return unwrapWrite(result, 'Could not create the opportunity') as Opportunity;
-}
+/**
+ * Deliberately absent: a plain `createOpportunity`.
+ *
+ * Opening a deal also moves the lead's stage and writes its timeline, so
+ * creation goes through `crm_convert_lead_to_opportunity` in `workflow.ts`,
+ * which does all three in one transaction. A bare INSERT alongside it would be
+ * the easier import to reach for and would silently leave the lead behind.
+ */
 
 export async function updateOpportunity(
   client: CrmSupabaseClient,

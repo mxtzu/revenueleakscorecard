@@ -30,8 +30,15 @@ export interface RecordedQuery {
   payload?: unknown;
 }
 
+/** A recorded `rpc()` call: the function name and the argument object. */
+export interface RecordedRpc {
+  fn: string;
+  args: Record<string, unknown>;
+}
+
 export class RecordingClient {
   queries: RecordedQuery[] = [];
+  rpcs: RecordedRpc[] = [];
 
   /** Rows handed back to the caller; the shape rarely matters to these tests. */
   constructor(private rows: unknown[] = []) {}
@@ -40,6 +47,12 @@ export class RecordingClient {
     const query = this.queries[this.queries.length - 1];
     if (!query) throw new Error('No query was issued.');
     return query;
+  }
+
+  get lastRpc(): RecordedRpc {
+    const call = this.rpcs[this.rpcs.length - 1];
+    if (!call) throw new Error('No RPC was issued.');
+    return call;
   }
 
   /** Every filter applied to an embedded resource, by alias prefix. */
@@ -129,7 +142,16 @@ export class RecordingClient {
       return builder;
     };
 
-    return { from } as unknown as CrmSupabaseClient;
+    // The workflow layer calls stored functions rather than building queries.
+    // What matters there is the argument object: Postgres resolves named
+    // arguments by name, so a mistyped key is a runtime "function does not
+    // exist", not a type error.
+    const rpc = (fn: string, args: Record<string, unknown>) => {
+      store.rpcs.push({ fn, args });
+      return Promise.resolve({ data: store.rows[0] ?? null, error: null });
+    };
+
+    return { from, rpc } as unknown as CrmSupabaseClient;
   }
 }
 

@@ -63,6 +63,9 @@ import {
   saveTask
 } from '../../_actions/crud';
 import { removeDocument, uploadDocument } from '../../_actions/records';
+import { convertLead } from '../../_actions/workflow';
+import { ConvertLeadForm } from '@/components/crm/workflowForms';
+import { isClosedStage } from '@/lib/crm/workflow';
 import { noteText } from '@/lib/crm/mutations';
 import { canWrite, isAdmin } from '@/lib/crm/permissions';
 import {
@@ -135,6 +138,14 @@ export default async function LeadDetailPage({
         description={info?.lead_reason ?? undefined}
         actions={
           <>
+            {writable && !isClosedStage(lead.pipeline_stage) ? (
+              <Link
+                href={`${here}/call`}
+                className="rounded-lg bg-electric-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-electric-600"
+              >
+                Start sales call
+              </Link>
+            ) : null}
             <ScoreBadge score={info?.lead_score} />
             <StageBadge stage={lead.pipeline_stage} />
           </>
@@ -479,13 +490,19 @@ export default async function LeadDetailPage({
 
           <div className="mt-4 border-t border-line-soft pt-4">
             {writable ? (
-              <Disclosure summary="Add an opportunity" tone="primary">
-                <OpportunityForm
-                  action={saveOpportunity}
-                  returnTo={here}
+              <Disclosure summary="Open an opportunity" tone="primary">
+                <ConvertLeadForm
+                  action={convertLead}
                   leadId={lead.id}
+                  returnTo={here}
+                  companyName={name}
                   people={people}
                   contacts={contactOptions}
+                  defaults={{
+                    service_name: info?.recommended_service
+                      ? humanise(info.recommended_service)
+                      : null
+                  }}
                 />
               </Disclosure>
             ) : (

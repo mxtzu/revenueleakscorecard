@@ -18,7 +18,12 @@ import {
   StatCard,
   Table
 } from '@/components/crm/ui';
-import { ClientForm, OpportunityForm, ProposalForm } from '@/components/crm/entityForms';
+import { OpportunityForm, ProposalForm } from '@/components/crm/entityForms';
+import {
+  LoseDealForm,
+  SendProposalForm,
+  WinDealForm
+} from '@/components/crm/workflowForms';
 import { ActionError, DeleteForm, Disclosure, ReadOnlyNotice } from '@/components/crm/forms';
 import { formatDate, formatMoney, humanise, orDash } from '@/lib/crm/format';
 import { canWrite, isAdmin } from '@/lib/crm/permissions';
@@ -31,8 +36,9 @@ import {
 import { crmSession } from '@/lib/crm/server';
 import type { Opportunity, OpportunityStage } from '@/lib/crm/types';
 
-import { removeOpportunity, saveClient, saveOpportunity } from '../_actions/crud';
+import { removeOpportunity, saveOpportunity } from '../_actions/crud';
 import { removeProposal, saveProposal } from '../_actions/records';
+import { markLost, markWon, sendProposal } from '../_actions/workflow';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,7 +60,8 @@ function contractValue(opportunity: Opportunity): number {
 export default async function OpportunitiesPage({
   searchParams
 }: {
-  searchParams?: { error?: string };
+  /** `highlight` is set by the convert action, to find the new deal in a long table. */
+  searchParams?: { error?: string; highlight?: string };
 }) {
   const { client, profile } = await crmSession();
   const [opportunities, team, leads, proposals] = await Promise.all([
@@ -87,6 +94,13 @@ export default async function OpportunitiesPage({
 
   const open = opportunities.filter((item) => item.stage !== 'won' && item.stage !== 'lost');
   const won = opportunities.filter((item) => item.stage === 'won');
+
+  // How many live deals each lead has, so the lose form can say truthfully
+  // whether closing this one would also close the lead.
+  const openByLead = new Map<string, number>();
+  for (const deal of open) {
+    openByLead.set(deal.crm_lead_id, (openByLead.get(deal.crm_lead_id) ?? 0) + 1);
+  }
 
   const openValue = open.reduce((total, item) => total + contractValue(item), 0);
   const weighted = open.reduce(
@@ -146,7 +160,14 @@ export default async function OpportunitiesPage({
             ]}
           >
             {opportunities.map((opportunity) => (
-              <Row key={opportunity.id}>
+              <Row
+                key={opportunity.id}
+                className={
+                  opportunity.id === searchParams?.highlight
+                    ? 'bg-electric-500/5 ring-1 ring-inset ring-electric-500/30'
+                    : ''
+                }
+              >
                 <Cell>
                   <Link
                     href={`/leads/${opportunity.crm_lead_id}`}
@@ -219,6 +240,19 @@ export default async function OpportunitiesPage({
                                 </a>
                               ) : null}
                               <div className="mt-2 space-y-2 border-t border-line-soft pt-2">
+                                {proposal.status === 'draft' || proposal.status === 'sent' ? (
+                                  <Disclosure
+                                    summary={proposal.sent_at ? 'Re-send' : 'Mark as sent'}
+                                    tone="primary"
+                                  >
+                                    <SendProposalForm
+                                      action={sendProposal}
+                                      proposal={proposal}
+                                      returnTo="/opportunities"
+                                      leadId={opportunity.crm_lead_id}
+                                    />
+                                  </Disclosure>
+                                ) : null}
                                 <Disclosure summary="Edit">
                                   <ProposalForm
                                     action={saveProposal}
@@ -247,22 +281,39 @@ export default async function OpportunitiesPage({
                           </Disclosure>
                         </div>
                       </Disclosure>
-                      {opportunity.stage === 'won' ? (
-                        <Disclosure summary="Convert to client" tone="primary">
+                      {opportunity.stage === 'lost' ? null : (
+                        <Disclosure
+                          summary={opportunity.stage === 'won' ? 'Create the account' : 'Mark won'}
+                          tone="primary"
+                        >
                           <div className="min-w-[320px] py-2">
-                            <ClientForm
-                              action={saveClient}
-                              returnTo="/clients"
+                            <WinDealForm
+                              action={markWon}
+                              opportunity={opportunity}
+                              returnTo="/opportunities"
+                              companyName={
+                                leadName.get(opportunity.crm_lead_id) ?? opportunity.name
+                              }
                               people={people}
-                              defaults={{
-                                company_name: leadName.get(opportunity.crm_lead_id) ?? opportunity.name,
-                                crm_lead_id: opportunity.crm_lead_id,
-                                opportunity_id: opportunity.id
-                              }}
                             />
                           </div>
                         </Disclosure>
-                      ) : null}
+                      )}
+
+                      {opportunity.stage === 'won' || opportunity.stage === 'lost' ? null : (
+                        <Disclosure summary="Mark lost" tone="danger">
+                          <div className="min-w-[320px] py-2">
+                            <LoseDealForm
+                              action={markLost}
+                              opportunity={opportunity}
+                              returnTo="/opportunities"
+                              otherOpenDeals={
+                                (openByLead.get(opportunity.crm_lead_id) ?? 1) - 1
+                              }
+                            />
+                          </div>
+                        </Disclosure>
+                      )}
                       <DeleteForm
                         action={removeOpportunity}
                         id={opportunity.id}
