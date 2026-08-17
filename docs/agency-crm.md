@@ -66,7 +66,56 @@ many times it is re-scraped.
    update public.profiles set role = 'owner' where email = 'you@agency.com';
    ```
 
-5. `npm run dev`, then sign in at `/login`.
+5. **Check it before you trust it.**
+
+   ```bash
+   npm run doctor
+   ```
+
+   Validates configuration, confirms all 18 tables exist and both migrations are
+   applied, finds an admin account, and — most importantly — verifies that a
+   signed-out request reads nothing. A misconfigured CRM and an empty one look
+   identical in the browser, so guessing between them costs more than the check.
+
+6. `npm run dev`, then sign in at `/login`.
+
+---
+
+## Deploying to production
+
+**Vercel**, Node runtime. Do not set `GITHUB_PAGES=true` — the CRM is
+server-rendered per request and cannot be statically exported; `npm run doctor`
+fails the build target check if it finds it.
+
+Environment variables, all three at Production scope:
+
+| Variable | Scope | Notes |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | browser + server | Safe to expose |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | browser + server | Safe to expose; RLS is what protects the data |
+| `SUPABASE_SERVICE_ROLE_KEY` | **server only** | Bypasses RLS entirely |
+| `LEAD_SYNC_SECRET` | server only | Optional; the import route 503s until it is set |
+
+The service-role key must never be given a `NEXT_PUBLIC_` name — that compiles
+it into the browser bundle and hands every visitor full database access.
+`npm run doctor` checks for exactly that and fails.
+
+Run the preflight against production once deployed:
+
+```bash
+vercel env pull .env.production.local
+env $(grep -v '^#' .env.production.local | xargs) npm run doctor
+```
+
+### Sessions
+
+`src/middleware.ts` refreshes the Supabase access token on every CRM request and
+redirects signed-out visitors to `/login?next=…`. Without it, tokens expire after
+about an hour and users are silently logged out: Server Components cannot write
+cookies, so nothing else in the App Router can persist a refreshed token.
+
+It runs on the CRM paths and `/login` only. `POST /api/crm/sync-leads` is
+deliberately excluded — it authenticates with a shared secret, not a session.
 
 ---
 
@@ -191,9 +240,8 @@ to a lead.
 ## Tests
 
 ```bash
-npm run test        # sync mapping and idempotency (vitest)
-npm run typecheck
-npm run build
+npm run verify      # typecheck + unit tests + build, in that order
+npm run doctor      # configuration, schema and RLS against a live project
 
 # schema assertions against a real Postgres 16
 CRM_TEST_DATABASE_URL=postgres://postgres@localhost:5432/postgres npm run db:test

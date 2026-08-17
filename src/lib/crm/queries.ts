@@ -45,27 +45,60 @@ export interface LeadListFilters {
   limit?: number;
 }
 
-const LEAD_WITH_INTELLIGENCE_SELECT = `
-  *,
-  intelligence:lead_intelligence(*),
-  owner:profiles!crm_leads_owner_id_fkey(id, full_name, email)
-`;
+/**
+ * The embed is aliased `intelligence`, and PostgREST resolves embedded filters
+ * by the name used in the select — so filters must say `intelligence.niche`,
+ * never `lead_intelligence.niche`.
+ *
+ * `!inner` matters just as much. Filtering an embedded resource without it
+ * filters the *embed* and returns every parent row regardless, with the embed
+ * emptied: a search for "Riverside" would hand back all 200 leads, most of them
+ * showing a raw id instead of a company name. The inner join is what makes the
+ * filter apply to the lead.
+ *
+ * The join is only requested when a filter needs it. An inner join would
+ * otherwise silently drop leads that have no intelligence row yet — a lead
+ * created before its first sync would vanish from an unfiltered list.
+ */
+const OWNER_EMBED = 'owner:profiles!crm_leads_owner_id_fkey(id, full_name, email)';
+
+/**
+ * Written out in full rather than composed at runtime: supabase-js parses the
+ * select string at the type level, and a `string` it cannot read collapses the
+ * row type to an error placeholder.
+ */
+const LEAD_SELECT = `*, intelligence:lead_intelligence(*), ${OWNER_EMBED}` as const;
+const LEAD_SELECT_INNER = `*, intelligence:lead_intelligence!inner(*), ${OWNER_EMBED}` as const;
+
+/**
+ * PostgREST treats these as reserved inside a filter value, so they are
+ * replaced rather than escaped — a user typing "100%" wants a literal search,
+ * not a wildcard. Runs of whitespace collapse so the replacement does not leave
+ * a term that matches nothing.
+ */
+function escapeLike(value: string): string {
+  return value.replace(/[%_,()]/g, ' ').replace(/\s+/g, ' ').trim();
+}
 
 export async function listLeads(
   client: CrmSupabaseClient,
   filters: LeadListFilters = {}
 ): Promise<CrmLeadWithIntelligence[]> {
-  let query = client.from('crm_leads').select(LEAD_WITH_INTELLIGENCE_SELECT);
+  const search = filters.search ? escapeLike(filters.search) : '';
+  const needsIntelligence = Boolean(filters.niche || filters.minScore !== undefined || search);
+
+  let query = client
+    .from('crm_leads')
+    .select(needsIntelligence ? LEAD_SELECT_INNER : LEAD_SELECT);
 
   if (filters.stage) query = query.eq('pipeline_stage', filters.stage);
   if (filters.ownerId) query = query.eq('owner_id', filters.ownerId);
-  if (filters.niche) query = query.eq('lead_intelligence.niche', filters.niche);
+  if (filters.niche) query = query.eq('intelligence.niche', filters.niche);
   if (filters.minScore !== undefined) {
-    query = query.gte('lead_intelligence.lead_score', filters.minScore);
+    query = query.gte('intelligence.lead_score', filters.minScore);
   }
-  if (filters.search) {
-    // PostgREST embeds are filtered with the `resource.column` form.
-    query = query.ilike('lead_intelligence.company_name', `%${filters.search}%`);
+  if (search) {
+    query = query.ilike('intelligence.company_name', `%${search}%`);
   }
 
   const result = await query
@@ -98,7 +131,7 @@ export async function getLeadById(
 ): Promise<CrmLeadWithIntelligence | null> {
   const result = await client
     .from('crm_leads')
-    .select(LEAD_WITH_INTELLIGENCE_SELECT)
+    .select(LEAD_SELECT)
     .eq('id', id)
     .maybeSingle();
 
@@ -112,7 +145,7 @@ export async function getLeadByExternalId(
 ): Promise<CrmLeadWithIntelligence | null> {
   const result = await client
     .from('crm_leads')
-    .select(LEAD_WITH_INTELLIGENCE_SELECT)
+    .select(LEAD_SELECT)
     .eq('external_lead_id', externalLeadId)
     .maybeSingle();
 

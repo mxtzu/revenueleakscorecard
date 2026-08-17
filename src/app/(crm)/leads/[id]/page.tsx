@@ -40,8 +40,9 @@ import {
   humanise,
   orDash
 } from '@/lib/crm/format';
+import { canWrite } from '@/lib/crm/permissions';
 import { getLeadDetail } from '@/lib/crm/queries';
-import { crmClient } from '@/lib/crm/server';
+import { crmSession } from '@/lib/crm/server';
 import { PIPELINE_STAGES, PIPELINE_STAGE_LABELS } from '@/lib/crm/types';
 
 import { addNote, changeStage, logCommunication } from './actions';
@@ -51,9 +52,20 @@ export const dynamic = 'force-dynamic';
 const inputClass =
   'w-full rounded-lg border border-line bg-ink-800 px-3 py-2 text-sm text-white placeholder:text-white/25';
 
-export default async function LeadDetailPage({ params }: { params: { id: string } }) {
-  const lead = await getLeadDetail(crmClient(), params.id);
+export default async function LeadDetailPage({
+  params,
+  searchParams
+}: {
+  params: { id: string };
+  searchParams?: { error?: string };
+}) {
+  const { client, profile } = await crmSession();
+  const lead = await getLeadDetail(client, params.id);
   if (!lead) notFound();
+
+  // Hiding forms a role cannot submit is presentation only; the server action
+  // re-checks and RLS refuses regardless.
+  const writable = canWrite(profile);
 
   const info = lead.intelligence;
   const name = info?.company_name ?? lead.external_lead_id;
@@ -82,6 +94,21 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
           </>
         }
       />
+
+      {searchParams?.error ? (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-rose-400/25 bg-rose-400/5 px-4 py-3 text-sm text-rose-200"
+        >
+          {searchParams.error}
+        </div>
+      ) : null}
+
+      {!writable ? (
+        <p className="mb-4 rounded-lg border border-line bg-white/[0.02] px-4 py-2.5 text-xs text-white/45">
+          Read-only: your role cannot change stages or log activity.
+        </p>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {/* ---------------------------------------------------------------- */}
@@ -112,6 +139,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
             </p>
           ) : null}
 
+          {writable ? (
           <form action={changeStage} className="mt-5 space-y-3 border-t border-line-soft pt-4">
             <input type="hidden" name="lead_id" value={lead.id} />
             <label className="block">
@@ -137,6 +165,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
               Update stage
             </button>
           </form>
+          ) : null}
         </Card>
 
         {/* ---------------------------------------------------------------- */}
@@ -296,8 +325,8 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
           {info?.contact_name ? (
             <p className="mb-3 rounded-lg border border-line-soft bg-white/[0.02] px-3 py-2 text-xs text-white/55">
               Research found <span className="text-white/85">{info.contact_name}</span>
-              {info.contact_role ? ` (${info.contact_role})` : ''} on the company website. Add them
-              below to make them a CRM contact — the sync will not do it for you.
+              {info.contact_role ? ` (${info.contact_role})` : ''} on the company website. This is a
+              synced finding, not a CRM contact — adding contacts is not built yet.
             </p>
           ) : null}
           {lead.contacts.length === 0 ? (
@@ -389,6 +418,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
           description="A record of what happened. Nothing on this page sends anything."
           className="xl:col-span-2"
         >
+          {writable ? (
           <div className="grid grid-cols-1 gap-4 border-b border-line-soft pb-5 sm:grid-cols-2">
             <form action={addNote} className="space-y-2">
               <input type="hidden" name="lead_id" value={lead.id} />
@@ -425,6 +455,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
               </button>
             </form>
           </div>
+          ) : null}
 
           {lead.activities.length === 0 ? (
             <div className="pt-5">

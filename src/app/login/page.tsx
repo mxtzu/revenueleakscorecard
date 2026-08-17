@@ -23,12 +23,25 @@ export const metadata = {
   robots: { index: false, follow: false }
 };
 
+/**
+ * Only same-origin paths are honoured as a post-login destination. An
+ * attacker-supplied `?next=https://evil.example` would otherwise turn the login
+ * page into an open redirect that borrows this site's credibility.
+ */
+function safeNext(value: string | undefined): string {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/dashboard';
+  return value;
+}
+
 async function signIn(formData: FormData) {
   'use server';
 
   const email = String(formData.get('email') ?? '').trim();
   const password = String(formData.get('password') ?? '');
-  if (!email || !password) redirect('/login?error=Enter%20your%20email%20and%20password.');
+  const next = safeNext(String(formData.get('next') ?? ''));
+  if (!email || !password) {
+    redirect(`/login?error=${encodeURIComponent('Enter your email and password.')}`);
+  }
 
   const client = createServerClient(
     cookies() as unknown as Parameters<typeof createServerClient>[0]
@@ -39,17 +52,18 @@ async function signIn(formData: FormData) {
     // Supabase already returns a generic "Invalid login credentials" for both
     // an unknown email and a wrong password; pass it through rather than
     // inventing a message that distinguishes them.
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+    redirect(`/login?error=${encodeURIComponent(error.message)}&next=${encodeURIComponent(next)}`);
   }
-  redirect('/dashboard');
+  redirect(next);
 }
 
 export default function LoginPage({
   searchParams
 }: {
-  searchParams?: { error?: string };
+  searchParams?: { error?: string; next?: string };
 }) {
   const error = searchParams?.error;
+  const next = safeNext(searchParams?.next);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-ink-950 px-5 py-12">
@@ -64,6 +78,7 @@ export default function LoginPage({
           </p>
         ) : (
           <form action={signIn} className="mt-6 space-y-4">
+            <input type="hidden" name="next" value={next} />
             <label className="block">
               <span className="label-mono text-white/40">Email</span>
               <input

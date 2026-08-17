@@ -3,38 +3,78 @@
 /**
  * Mutations for the lead detail page.
  *
- * Every one runs through the session-scoped client, so RLS decides whether the
- * caller may write — a viewer submitting the form by hand gets a database
- * error, not a silent success. Nothing here uses the service role.
+ * Three layers, deliberately:
+ *
+ *   1. The UI hides write forms from roles that cannot use them.
+ *   2. These actions re-check the role, because hiding a form stops nobody who
+ *      can craft a POST — and a form submitted just as an admin demotes you
+ *      would otherwise reach the database on a stale assumption.
+ *   3. RLS refuses the write regardless. That is the actual guarantee; 1 and 2
+ *      exist so the user gets a sentence instead of a Postgres error.
+ *
+ * Failures redirect back with a readable message rather than throwing. An
+ * uncaught throw in a Server Action replaces the whole page with the error
+ * boundary, losing whatever else was on screen.
  */
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 
-import { recordActivity, setPipelineStage } from '@/lib/crm/queries';
+import { assertCanWrite, PermissionError } from '@/lib/crm/permissions';
+import { getCurrentProfile, recordActivity, setPipelineStage } from '@/lib/crm/queries';
 import { crmClient } from '@/lib/crm/server';
 import { isPipelineStage } from '@/lib/crm/types';
+import type { CrmSupabaseClient } from '@/lib/crm/supabase';
 
 function optional(formData: FormData, key: string): string | null {
   const value = String(formData.get(key) ?? '').trim();
   return value.length ? value : null;
 }
 
+/** Resolve the caller and confirm their role permits writing. */
+async function writer(): Promise<{ client: CrmSupabaseClient; userId: string | null }> {
+  const client = crmClient();
+  const profile = await getCurrentProfile(client);
+  assertCanWrite(profile);
+  return { client, userId: profile?.id ?? null };
+}
+
+function failureMessage(error: unknown): string {
+  if (error instanceof PermissionError) return error.message;
+  const message = error instanceof Error ? error.message : String(error);
+  // RLS denials are accurate but unreadable; everything else is worth showing.
+  if (/row-level security|permission denied/i.test(message)) {
+    return 'The database refused that write. Your role may have changed — reload and try again.';
+  }
+  return message;
+}
+
+/** Redirect back to the lead with an error banner. Never returns. */
+function fail(leadId: string, error: unknown): never {
+  redirect(`/leads/${leadId}?error=${encodeURIComponent(failureMessage(error))}`);
+}
+
 export async function changeStage(formData: FormData) {
   const id = String(formData.get('lead_id') ?? '');
   const stage = String(formData.get('stage') ?? '');
-  if (!id || !isPipelineStage(stage)) {
-    throw new Error('A lead id and a valid pipeline stage are required.');
-  }
+  if (!id) throw new Error('A lead id is required.');
+  if (!isPipelineStage(stage)) fail(id, new Error(`"${stage}" is not a pipeline stage.`));
 
   const reason = optional(formData, 'reason');
-  await setPipelineStage(crmClient(), id, stage, {
-    // The reason column depends on why the lead closed; storing a loss reason
-    // on a disqualification (or vice versa) would corrupt both reports.
-    ...(stage === 'lost' ? { loss_reason: reason } : {}),
-    ...(stage === 'disqualified' || stage === 'do_not_contact'
-      ? { disqualification_reason: reason }
-      : {})
-  });
+
+  try {
+    const { client } = await writer();
+    await setPipelineStage(client, id, stage, {
+      // The reason column depends on why the lead closed; storing a loss reason
+      // on a disqualification (or vice versa) would corrupt both reports.
+      ...(stage === 'lost' ? { loss_reason: reason } : {}),
+      ...(stage === 'disqualified' || stage === 'do_not_contact'
+        ? { disqualification_reason: reason }
+        : {})
+    });
+  } catch (error) {
+    fail(id, error);
+  }
 
   revalidatePath(`/leads/${id}`);
   revalidatePath('/leads');
@@ -44,22 +84,25 @@ export async function changeStage(formData: FormData) {
 export async function addNote(formData: FormData) {
   const id = String(formData.get('lead_id') ?? '');
   const body = String(formData.get('body') ?? '').trim();
-  if (!id || !body) throw new Error('A lead id and note text are required.');
+  if (!id) throw new Error('A lead id is required.');
+  if (!body) fail(id, new Error('A note needs some text.'));
 
-  const client = crmClient();
-  const { data } = await client.auth.getUser();
-
-  await recordActivity(client, {
-    crm_lead_id: id,
-    client_id: null,
-    contact_id: null,
-    user_id: data.user?.id ?? null,
-    type: 'note',
-    direction: 'internal',
-    subject: optional(formData, 'subject'),
-    body,
-    outcome: null
-  });
+  try {
+    const { client, userId } = await writer();
+    await recordActivity(client, {
+      crm_lead_id: id,
+      client_id: null,
+      contact_id: null,
+      user_id: userId,
+      type: 'note',
+      direction: 'internal',
+      subject: optional(formData, 'subject'),
+      body,
+      outcome: null
+    });
+  } catch (error) {
+    fail(id, error);
+  }
 
   revalidatePath(`/leads/${id}`);
 }
@@ -77,26 +120,28 @@ export async function logCommunication(formData: FormData) {
   const direction = String(formData.get('direction') ?? '');
   if (!id) throw new Error('A lead id is required.');
   if (type !== 'call' && type !== 'email' && type !== 'meeting') {
-    throw new Error('Only calls, emails and meetings can be logged here.');
+    fail(id, new Error('Only calls, emails and meetings can be logged here.'));
   }
   if (direction !== 'inbound' && direction !== 'outbound') {
-    throw new Error('Direction must be inbound or outbound.');
+    fail(id, new Error('Direction must be inbound or outbound.'));
   }
 
-  const client = crmClient();
-  const { data } = await client.auth.getUser();
-
-  await recordActivity(client, {
-    crm_lead_id: id,
-    client_id: null,
-    contact_id: null,
-    user_id: data.user?.id ?? null,
-    type,
-    direction,
-    subject: optional(formData, 'subject'),
-    body: optional(formData, 'body'),
-    outcome: optional(formData, 'outcome')
-  });
+  try {
+    const { client, userId } = await writer();
+    await recordActivity(client, {
+      crm_lead_id: id,
+      client_id: null,
+      contact_id: null,
+      user_id: userId,
+      type,
+      direction,
+      subject: optional(formData, 'subject'),
+      body: optional(formData, 'body'),
+      outcome: optional(formData, 'outcome')
+    });
+  } catch (error) {
+    fail(id, error);
+  }
 
   // An inbound reply halts outreach and advances the stage via a database
   // trigger, so the lead row may have changed too.
