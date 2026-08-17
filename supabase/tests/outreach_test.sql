@@ -420,6 +420,42 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------------------------
+\echo '== the suppression check is not an enumeration oracle =='
+-- ---------------------------------------------------------------------------
+/**
+ * Found in the Sprint 7 security review. `crm_is_suppressed` is SECURITY
+ * DEFINER, and Postgres grants EXECUTE to PUBLIC by default — so anyone holding
+ * the anon key, which is in the browser bundle, could ask whether a named
+ * person is on this agency's do-not-contact list.
+ */
+do $$
+begin
+  perform pg_temp.assert(
+    not has_function_privilege('anon', 'public.crm_is_suppressed(text, text)', 'execute'),
+    'anon cannot call crm_is_suppressed');
+  perform pg_temp.assert(
+    has_function_privilege('authenticated', 'public.crm_is_suppressed(text, text)', 'execute'),
+    'a signed-in user still can');
+  perform pg_temp.assert(
+    has_function_privilege('service_role', 'public.crm_is_suppressed(text, text)', 'execute'),
+    'and so can the send path');
+end;
+$$;
+
+do $$
+declare refused boolean := false;
+begin
+  set local role anon;
+  begin
+    perform public.crm_is_suppressed('owner@practice.co.uk', null);
+  exception when insufficient_privilege then refused := true;
+  end;
+  reset role;
+  perform pg_temp.assert(refused, 'and an anonymous attempt is actually refused');
+end;
+$$;
+
 \echo ''
 \echo '=========================================='
 \echo ' ALL OUTREACH TESTS PASSED'

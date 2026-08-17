@@ -15,6 +15,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+import { safeDestination, withMessage } from '@/lib/crm/redirects';
 import { readableWriteError, ValidationError } from '@/lib/crm/errors';
 import { requireAdmin, requireWriter } from '@/lib/crm/server';
 import { createServiceClient, isServiceRoleConfigured } from '@/lib/crm/supabase';
@@ -31,16 +32,15 @@ import {
 const SUPPRESSION_REASONS = ['manual', 'unsubscribed', 'bounced', 'complained', 'invalid'] as const;
 
 function destination(form: FormData, fallback: string): string {
-  const value = String(form.get('return_to') ?? '');
-  if (!value.startsWith('/') || value.startsWith('//')) return fallback;
-  return value;
+  // Shared, because six near-identical copies of this check is how one of them
+  // ends up missing the backslash case. See src/lib/crm/redirects.ts.
+  return safeDestination(form.get('return_to'), fallback);
 }
 
 function back(form: FormData, fallback: string, key: 'error' | 'notice', message?: string): never {
   const path = destination(form, fallback);
   if (!message) redirect(path);
-  const separator = path.includes('?') ? '&' : '?';
-  redirect(`${path}${separator}${key}=${encodeURIComponent(message)}`);
+  redirect(withMessage(path, key, message));
 }
 
 function refresh(leadId?: string | null): void {

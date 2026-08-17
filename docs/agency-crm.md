@@ -83,6 +83,22 @@ many times it is re-scraped.
 
 ## Deploying to production
 
+Full runbook in **[docs/deployment.md](deployment.md)**; the security review
+done before the first deploy is in **[docs/security-review.md](security-review.md)**.
+Scheduled work is in **[docs/vercel-crons.md](vercel-crons.md)**.
+
+```bash
+npm run preflight    # are these environment variables coherent? no I/O
+npm run doctor       # is this deployment healthy? talks to the database
+npm run backup       # logical export, secondary to Supabase PITR
+```
+
+`preflight` runs as part of `npm run verify` and exits non-zero on a
+configuration that will break production — a secret with a `NEXT_PUBLIC_`
+prefix, a Stripe key with no webhook secret, outreach with no site URL for its
+unsubscribe links, or the `service_role` key pasted into the anon slot.
+
+
 **Vercel**, Node runtime. Do not set `GITHUB_PAGES=true` — the CRM is
 server-rendered per request and cannot be statically exported; `npm run doctor`
 fails the build target check if it finds it.

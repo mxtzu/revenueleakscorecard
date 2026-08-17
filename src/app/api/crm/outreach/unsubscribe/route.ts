@@ -28,6 +28,24 @@ interface Enrolment {
   contact_id: string | null;
 }
 
+/**
+ * Escape for an HTML attribute or text node.
+ *
+ * This route builds raw HTML rather than JSX, so it is the one place in the
+ * application without React's automatic escaping. The token arrives from the
+ * query string; stripping only quotes happened to be safe inside a
+ * double-quoted attribute, but "happened to be safe" is not a property worth
+ * relying on the next time this markup is edited.
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function page(title: string, body: string, form?: string): NextResponse {
   return new NextResponse(
     `<!doctype html><html lang="en"><head><meta charset="utf-8" />
@@ -71,7 +89,7 @@ export async function GET(request: NextRequest) {
   return page(
     'Unsubscribe',
     'Confirm and we will stop contacting you. This takes effect immediately and applies to every future message, not just this one.',
-    `<form method="post"><input type="hidden" name="token" value="${token.replace(/"/g, '')}" />
+    `<form method="post"><input type="hidden" name="token" value="${escapeHtml(token)}" />
      <button type="submit">Unsubscribe me</button></form>`
   );
 }

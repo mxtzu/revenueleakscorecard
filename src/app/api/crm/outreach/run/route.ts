@@ -19,6 +19,7 @@ import { isAdmin } from '@/lib/crm/permissions';
 import { crmSession } from '@/lib/crm/server';
 import { createServiceClient, isCrmConfigured, isServiceRoleConfigured } from '@/lib/crm/supabase';
 import { secretMatches } from '@/lib/calendar/webhookAuth';
+import { reportError } from '@/lib/observability';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -61,8 +62,20 @@ export async function POST(request: NextRequest) {
       sms: smsProvider(),
       siteUrl: siteUrl(request.nextUrl.origin)
     });
+    // Reported even on success when something inside was refused, because a
+    // run that skips everything looks identical to an idle one in the logs.
+    if (result.failed > 0) {
+      await reportError(new Error(result.reasons[0] ?? 'outreach send failed'), {
+        operation: 'outreach.run',
+        severity: 'warning',
+        extra: { failed: result.failed, sent: result.sent, skipped: result.skipped }
+      });
+    }
     return NextResponse.json(result);
   } catch (error) {
+    // A cron-driven run has nobody watching it; without this the engine can be
+    // throwing for a fortnight and look exactly like a quiet week.
+    await reportError(error, { operation: 'outreach.run' });
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 }

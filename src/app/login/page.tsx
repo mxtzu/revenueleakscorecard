@@ -14,6 +14,8 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
+import { DEFAULT_DESTINATION, safeDestination } from '@/lib/crm/redirects';
+
 import { createServerClient, isCrmConfigured } from '@/lib/crm/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -29,8 +31,9 @@ export const metadata = {
  * page into an open redirect that borrows this site's credibility.
  */
 function safeNext(value: string | undefined): string {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/dashboard';
-  return value;
+  // Same shared guard the server actions use, so the login redirect cannot
+  // drift away from them. See src/lib/crm/redirects.ts.
+  return safeDestination(value, DEFAULT_DESTINATION);
 }
 
 async function signIn(formData: FormData) {

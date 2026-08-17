@@ -25,6 +25,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { applyEvent } from '@/lib/billing/events';
 import { isStripeConfigured, isWebhookConfigured, stripeClient } from '@/lib/billing/client';
 import { createServiceClient, isServiceRoleConfigured } from '@/lib/crm/supabase';
+import { reportError } from '@/lib/observability';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -74,6 +75,13 @@ export async function POST(request: NextRequest) {
     const outcome = await applyEvent(createServiceClient(), event);
 
     if (outcome.status === 'failed') {
+      // Money events. A silent failure here means the ledger and Stripe
+      // disagree, and nobody finds out until a client is chased for an invoice
+      // they already paid.
+      await reportError(new Error(outcome.detail), {
+        operation: 'stripe.webhook',
+        extra: { type: event.type, event_id: event.id }
+      });
       // Recorded in `stripe_events` with the reason; 500 so Stripe brings it
       // back once whatever broke is fixed.
       return NextResponse.json(
@@ -84,6 +92,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ received: true, ...outcome });
   } catch (error) {
+    await reportError(error, { operation: 'stripe.webhook', extra: { type: event.type } });
     return NextResponse.json(
       { error: (error as Error).message },
       { status: 500 }

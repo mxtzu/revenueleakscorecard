@@ -20,3 +20,7 @@ __pycache__/
 *.sqlite
 *.sqlite3
 output/
+
+# Logical database exports. Contains every lead, contact and message.
+backups/
+.env.production.local

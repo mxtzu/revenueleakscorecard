@@ -22,6 +22,7 @@ import { canWrite } from '@/lib/crm/permissions';
 import { crmSession } from '@/lib/crm/server';
 import { createServiceClient, isCrmConfigured, isServiceRoleConfigured } from '@/lib/crm/supabase';
 import { secretMatches } from '@/lib/calendar/webhookAuth';
+import { reportError } from '@/lib/observability';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -58,7 +59,17 @@ export async function POST(request: NextRequest) {
 
     const results: Record<string, SyncSummary> = {};
     for (const account of (data ?? []) as CalendarAccount[]) {
-      results[account.google_email] = await syncAccount(service, account);
+      const summary = await syncAccount(service, account);
+      results[account.google_email] = summary;
+      // syncAccount records its own failures on the account row, but nobody
+      // reads that on a schedule.
+      if (summary.errors.length > 0) {
+        await reportError(new Error(summary.errors[0]), {
+          operation: 'calendar.sync',
+          severity: 'warning',
+          extra: { account: account.google_email, failed: summary.failed }
+        });
+      }
     }
     return NextResponse.json({ accounts: Object.keys(results).length, results });
   }

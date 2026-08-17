@@ -19,6 +19,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+import { safeDestination, withMessage } from '@/lib/crm/redirects';
 import { readableWriteError, ValidationError } from '@/lib/crm/errors';
 import {
   createAppointment,
@@ -75,16 +76,15 @@ import {
  * login redirect is.
  */
 function destination(form: FormData, fallback: string): string {
-  const value = String(form.get('return_to') ?? '');
-  if (!value.startsWith('/') || value.startsWith('//')) return fallback;
-  return value;
+  // Shared, because six near-identical copies of this check is how one of them
+  // ends up missing the backslash case. See src/lib/crm/redirects.ts.
+  return safeDestination(form.get('return_to'), fallback);
 }
 
 function back(form: FormData, fallback: string, error?: unknown): never {
   const path = destination(form, fallback);
   if (error === undefined) redirect(path);
-  const separator = path.includes('?') ? '&' : '?';
-  redirect(`${path}${separator}error=${encodeURIComponent(readableWriteError(error))}`);
+  redirect(withMessage(path, 'error', readableWriteError(error)));
 }
 
 /** Revalidate the pages a change to this entity could be visible on. */

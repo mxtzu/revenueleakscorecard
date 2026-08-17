@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "regions": ["lhr1"],
+  "crons": [
+    {
+      "path": "/api/crm/outreach/run",
+      "schedule": "*/15 9-17 * * 1-5"
+    },
+    {
+      "path": "/api/crm/calendar/sync",
+      "schedule": "*/20 * * * *"
+    }
+  ],
+  "functions": {
+    "src/app/api/crm/outreach/run/route.ts": { "maxDuration": 60 },
+    "src/app/api/crm/calendar/sync/route.ts": { "maxDuration": 60 },
+    "src/app/api/crm/sync-leads/route.ts": { "maxDuration": 60 },
+    "src/app/api/crm/stripe/webhook/route.ts": { "maxDuration": 30 }
+  }
+}

@@ -12,12 +12,15 @@
     "test:watch": "vitest",
     "sync:leads": "tsx scripts/sync-leads.ts",
     "doctor": "tsx scripts/doctor.ts",
-    "verify": "npm run typecheck && npm run test && npm run build"
+    "verify": "npm run typecheck && npm run test && npm run preflight && npm run build",
+    "preflight": "tsx scripts/preflight.ts",
+    "backup": "tsx scripts/backup.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.1.0",
     "@fontsource/archivo-black": "^5.1.0",
     "@fontsource/ibm-plex-mono": "^5.1.0",
+    "@sentry/nextjs": "^10.70.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
     "clsx": "^2.1.1",

@@ -19,6 +19,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { claimProviderEvent, recordDeliveryEvent, recordInbound } from '@/lib/outreach/inbound';
 import { verifySvixSignature } from '@/lib/outreach/providers';
 import { createServiceClient, isCrmConfigured, isServiceRoleConfigured } from '@/lib/crm/supabase';
+import { reportError } from '@/lib/observability';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -105,7 +106,10 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({ received: true, ...outcome });
   } catch (error) {
-    // 500 so Resend redelivers once whatever broke is fixed.
+    // 500 so Resend redelivers once whatever broke is fixed — and reported,
+    // because a failing bounce handler means addresses that should have been
+    // suppressed are still being mailed.
+    await reportError(error, { operation: 'outreach.email_webhook', extra: { type: event.type } });
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 }
