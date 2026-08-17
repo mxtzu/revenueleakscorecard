@@ -195,3 +195,59 @@ export function timezone(form: FormData, field: string): string {
   }
   return value;
 }
+
+// ---------------------------------------------------------------------------
+// Files
+// ---------------------------------------------------------------------------
+/** Matches the bucket's file_size_limit; checked here so the error is readable. */
+export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+/**
+ * Executables and scripts are refused.
+ *
+ * The bucket is private and files are served through short-lived signed URLs,
+ * so this is not the last line of defence — but a CRM has no reason to hold a
+ * .exe or an .html, and an uploaded HTML file served from a signed URL is a
+ * stored-XSS delivery mechanism aimed at whoever clicks it.
+ */
+const BLOCKED_EXTENSIONS = new Set([
+  'exe', 'dll', 'bat', 'cmd', 'com', 'scr', 'msi', 'jar', 'app', 'deb', 'rpm',
+  'sh', 'bash', 'ps1', 'vbs', 'js', 'mjs', 'html', 'htm', 'svg', 'xhtml'
+]);
+
+export function uploadedFile(form: FormData, field: string): File {
+  const value = form.get(field);
+  if (!(value instanceof File) || value.size === 0) {
+    throw new ValidationError('Choose a file to upload.');
+  }
+  if (value.size > MAX_UPLOAD_BYTES) {
+    const megabytes = (value.size / 1024 / 1024).toFixed(1);
+    throw new ValidationError(`That file is ${megabytes} MB; the limit is 25 MB.`);
+  }
+  const extension = value.name.split('.').pop()?.toLowerCase() ?? '';
+  if (BLOCKED_EXTENSIONS.has(extension)) {
+    throw new ValidationError(`.${extension} files cannot be stored in the CRM.`);
+  }
+  return value;
+}
+
+/**
+ * A link to a document held somewhere else.
+ *
+ * Only http(s). A `javascript:` or `data:` URL rendered as a link is a
+ * scripting hole, and the field exists for "the signed PDF lives in Dropbox".
+ */
+export function optionalUrl(form: FormData, field: string, label: string): string | null {
+  const value = optionalText(form, field);
+  if (value === null) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new ValidationError(`${label} must be a full URL, starting https://`);
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new ValidationError(`${label} must be an http or https link.`);
+  }
+  return parsed.toString();
+}

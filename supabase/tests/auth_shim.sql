@@ -43,3 +43,29 @@ alter default privileges in schema public
   grant select, insert, update, delete on tables to authenticated;
 alter default privileges in schema public
   grant all on tables to service_role;
+
+-- ---------------------------------------------------------------------------
+-- Minimal stand-in for Supabase Storage, so 20260817_document_storage.sql runs
+-- and its policies can be asserted locally instead of only in production.
+-- ---------------------------------------------------------------------------
+create schema if not exists storage;
+
+create table if not exists storage.buckets (
+  id               text primary key,
+  name             text not null,
+  public           boolean not null default false,
+  file_size_limit  bigint,
+  created_at       timestamptz not null default now()
+);
+
+create table if not exists storage.objects (
+  id         uuid primary key default gen_random_uuid(),
+  bucket_id  text references storage.buckets(id),
+  name       text not null,
+  owner      uuid,
+  created_at timestamptz not null default now()
+);
+
+alter table storage.objects enable row level security;
+
+grant usage on schema storage to authenticated, anon, service_role;

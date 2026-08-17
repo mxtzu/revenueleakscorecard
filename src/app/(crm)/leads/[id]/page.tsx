@@ -35,6 +35,7 @@ import {
   displayUrl,
   formatDate,
   formatDateTime,
+  formatFileSize,
   formatMoney,
   formatRelative,
   humanise,
@@ -43,6 +44,7 @@ import {
 import {
   AppointmentForm,
   ContactForm,
+  DocumentUploadForm,
   NoteForm,
   OpportunityForm,
   TaskForm
@@ -60,9 +62,15 @@ import {
   saveOpportunity,
   saveTask
 } from '../../_actions/crud';
+import { removeDocument, uploadDocument } from '../../_actions/records';
 import { noteText } from '@/lib/crm/mutations';
 import { canWrite, isAdmin } from '@/lib/crm/permissions';
-import { getLeadDetail, listAssignableProfiles } from '@/lib/crm/queries';
+import {
+  getLeadDetail,
+  listAssignableProfiles,
+  listDocumentsForLead,
+  listOutreachForLead
+} from '@/lib/crm/queries';
 import { crmSession } from '@/lib/crm/server';
 import { PIPELINE_STAGES, PIPELINE_STAGE_LABELS } from '@/lib/crm/types';
 
@@ -81,9 +89,11 @@ export default async function LeadDetailPage({
   searchParams?: { error?: string };
 }) {
   const { client, profile } = await crmSession();
-  const [lead, team] = await Promise.all([
+  const [lead, team, documents, outreach] = await Promise.all([
     getLeadDetail(client, params.id),
-    listAssignableProfiles(client)
+    listAssignableProfiles(client),
+    listDocumentsForLead(client, params.id),
+    listOutreachForLead(client, params.id)
   ]);
   if (!lead) notFound();
 
@@ -642,6 +652,78 @@ export default async function LeadDetailPage({
             )}
           </div>
         </Card>
+
+        <Card title="Documents" description="Private storage; links expire after a minute.">
+          {documents.length === 0 ? (
+            <EmptyState title="No documents" />
+          ) : (
+            <ul className="space-y-2">
+              {documents.map((document) => (
+                <li key={document.id} className="rounded-lg border border-line-soft px-3 py-2.5">
+                  <a
+                    href={`/api/crm/documents/${document.id}`}
+                    className="text-sm text-electric-300 hover:underline"
+                  >
+                    {document.name}
+                  </a>
+                  <p className="mt-1 text-xs text-white/35">
+                    {formatFileSize(document.file_size)} · {orDash(document.mime_type)} ·{' '}
+                    {formatDateTime(document.created_at)}
+                  </p>
+                  {writable ? (
+                    <div className="mt-2 border-t border-line-soft pt-2">
+                      <DeleteForm
+                        action={removeDocument}
+                        id={document.id}
+                        hidden={{ crm_lead_id: lead.id, return_to: here }}
+                        label="Delete file"
+                        warning="The stored file is deleted too. This cannot be undone."
+                        allowed={deletable}
+                      />
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="mt-4 border-t border-line-soft pt-4">
+            {writable ? (
+              <Disclosure summary="Upload a document" tone="primary">
+                <DocumentUploadForm action={uploadDocument} returnTo={here} leadId={lead.id} />
+              </Disclosure>
+            ) : (
+              <ReadOnlyNotice what="upload documents" />
+            )}
+          </div>
+        </Card>
+
+        {/*
+          Enrolment state, read-only. Nothing in the CRM enrols a lead — the
+          sending engine is not built — but `halt_outreach_on_inbound_reply`
+          writes here, so state something else changed is at least visible.
+        */}
+        {outreach.length ? (
+          <Card title="Outreach" description="Set by the database, not by this page.">
+            <ul className="space-y-2">
+              {outreach.map((enrolment) => (
+                <li key={enrolment.id} className="rounded-lg border border-line-soft px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm text-white/85">Step {enrolment.current_step}</span>
+                    <Badge tone={enrolment.status === 'replied' ? 'positive' : 'neutral'}>
+                      {humanise(enrolment.status)}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-white/40">
+                    {enrolment.next_step_at
+                      ? `Next ${formatRelative(enrolment.next_step_at)}`
+                      : 'No next step scheduled'}
+                    {enrolment.stop_reason ? ` · stopped: ${enrolment.stop_reason}` : ''}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
 
         {/* ---------------------------------------------------------------- */}
         {/* 4. Activity timeline                                              */}

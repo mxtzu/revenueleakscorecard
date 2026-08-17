@@ -177,7 +177,8 @@ Enforced by four SECURITY DEFINER helpers used in every policy: `crm_role_of()`,
 
 ### What the UI can write
 
-Full create/edit/delete: **contacts, tasks, appointments, opportunities, clients, notes**.
+Full create/edit/delete: **contacts, tasks, appointments, opportunities, clients, notes,
+contracts, proposals, documents, outreach sequences and steps**.
 Create and edit are open to any writing role; **delete is admin-only**, matching
 `crm_is_admin()` in RLS — so the delete control renders for owners and admins
 only, rather than offering a button the database refuses.
@@ -189,9 +190,35 @@ disagree with the first is a reporting bug waiting to happen:
 - `opportunities.won_at` / `lost_at` follow `stage` (and an existing date is kept
   when a closed deal is edited, so "won last March" does not drift to today)
 
+Two more, added with contracts and proposals:
+
+- `contracts.signed_at` follows the status. Expired and terminated keep the date
+  — a contract that ran out was still signed — and only draft or sent clear it.
+- `proposals` stamps `sent_at`, `viewed_at` and `accepted_at` cumulatively, so a
+  proposal that was sent, then viewed, then accepted ends up with all three.
+  Proposal versions and outreach step numbers are derived, not typed.
+
 Wall-clock times entered in a form are interpreted in `Europe/London` unless the
 record carries its own zone, as appointments do. The offset is looked up rather
 than assumed: 14:00 in London is 14:00Z in January and 13:00Z in June.
+
+### Documents
+
+Files live in a **private** Supabase Storage bucket (`crm-documents`), created by
+`20260817_document_storage.sql`. Storage has its own RLS on `storage.objects`,
+entirely separate from the table policies, and the three object policies mirror
+the CRM's exactly: read for members, write for writers, delete for admins.
+Getting the row policy right and leaving the object policy open is the classic
+way to leak files while the database looks locked down.
+
+Pages link to `/api/crm/documents/[id]`, which resolves the row under the
+caller's session and redirects to a 60-second signed URL. Putting the signed URL
+in the page instead would leave a working credential in the HTML, in browser
+history and in any copied link.
+
+Uploads are capped at 25 MB and executables, scripts, HTML and SVG are refused —
+a file served from a signed URL is a stored-XSS vector aimed at whoever opens
+it.
 
 Three tables have **no write policy at all**:
 
@@ -231,9 +258,10 @@ Put in triggers rather than application code, so it holds no matter which client
 | `/pipeline` | Board, one column per active stage |
 | `/tasks` | Open tasks grouped by urgency; create, edit, complete, reopen, delete |
 | `/calendar` | Appointments by day; book, edit, change status, delete |
-| `/opportunities` | Deals with value totals; create, edit, delete, convert a won deal to a client |
+| `/opportunities` | Deals with value totals; create, edit, delete, convert a won deal to a client, manage proposals |
+| `/outreach` | Sequence and step templates. Writes templates only — nothing sends |
 | `/clients` | Accounts; create |
-| `/clients/[id]` | Account edit, contracts, payments, notes, tasks |
+| `/clients/[id]` | Account edit, contracts, documents, payments, notes, tasks |
 | `/payments` | All invoices, read-only |
 
 Every one is a server component reading through the session-scoped client, so RLS applies
@@ -252,6 +280,14 @@ summaries · client portal · advanced analytics · an automated outreach engine
 
 The CRM records that a call happened; it does not place one. Nothing in it sends a message
 to a lead.
+
+`/outreach` is the edge of this line and worth being precise about. You can write
+sequences, order their steps, set channels and delays, and draft the templates —
+that is the structure a sending engine would read, built now so the schema does
+not need re-cutting later. There is no enrol control and no send. `lead_outreach`
+shows enrolment state on a lead's page because
+`halt_outreach_on_inbound_reply` writes to it, not because anything here starts
+a sequence.
 
 ---
 

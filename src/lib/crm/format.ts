@@ -101,4 +101,13 @@ export function displayUrl(value: string | null | undefined): string {
   return value.replace(/^https?:\/\//i, '').replace(/\/$/, '');
 }
 
+/** Byte counts, at the precision a human reading a file list cares about. */
+export function formatFileSize(bytes: number | null | undefined): string {
+  if (bytes === null || bytes === undefined || !Number.isFinite(Number(bytes))) return EM_DASH;
+  const size = Number(bytes);
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(0)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
 export { EM_DASH };

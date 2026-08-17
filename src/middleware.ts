@@ -26,6 +26,7 @@ const PROTECTED = [
   '/tasks',
   '/calendar',
   '/opportunities',
+  '/outreach',
   '/clients',
   '/payments'
 ];
@@ -99,6 +100,7 @@ export const config = {
     '/tasks/:path*',
     '/calendar/:path*',
     '/opportunities/:path*',
+    '/outreach/:path*',
     '/clients/:path*',
     '/payments/:path*',
     '/login'

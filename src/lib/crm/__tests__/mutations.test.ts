@@ -249,3 +249,181 @@ describe('appointments', () => {
     expect(payload.timezone).toBe('Europe/London');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Sprint 3 entities
+// ---------------------------------------------------------------------------
+import {
+  createContract,
+  createDocument,
+  createProposal,
+  createStep,
+  documentPath,
+  nextProposalVersion,
+  updateContract,
+  updateProposal
+} from '../mutations';
+
+function contractInput(status: 'draft' | 'sent' | 'signed' | 'active' | 'expired' | 'terminated') {
+  return {
+    client_id: LEAD,
+    status,
+    start_date: null,
+    end_date: null,
+    monthly_value: 1500,
+    setup_fee: null,
+    document_url: null
+  };
+}
+
+/**
+ * A contract that expired was still signed at some point. Only going back to
+ * draft or sent clears the date, because those are the states of a contract
+ * nobody has signed.
+ */
+describe('contract signature date', () => {
+  it('is null while unsigned', async () => {
+    for (const status of ['draft', 'sent'] as const) {
+      const recorder = new RecordingClient([{ id: 'c1' }]);
+      await createContract(recorder.client(), contractInput(status));
+      expect((recorder.last.payload as { signed_at: unknown }).signed_at).toBeNull();
+    }
+  });
+
+  it('is stamped once the contract is signed or active', async () => {
+    for (const status of ['signed', 'active'] as const) {
+      const recorder = new RecordingClient([{ id: 'c1' }]);
+      await createContract(recorder.client(), contractInput(status));
+      expect((recorder.last.payload as { signed_at: string }).signed_at).toMatch(/^\d{4}/);
+    }
+  });
+
+  it('survives expiry and termination', async () => {
+    const existing = { signed_at: '2026-01-05T09:00:00.000Z' } as never;
+    for (const status of ['expired', 'terminated'] as const) {
+      const recorder = new RecordingClient([{ id: 'c1' }]);
+      await updateContract(recorder.client(), 'c1', contractInput(status), existing);
+      expect((recorder.last.payload as { signed_at: string }).signed_at).toBe(
+        '2026-01-05T09:00:00.000Z'
+      );
+    }
+  });
+
+  it('is cleared if a signed contract is put back to draft', async () => {
+    const existing = { signed_at: '2026-01-05T09:00:00.000Z' } as never;
+    const recorder = new RecordingClient([{ id: 'c1' }]);
+    await updateContract(recorder.client(), 'c1', contractInput('draft'), existing);
+    expect((recorder.last.payload as { signed_at: unknown }).signed_at).toBeNull();
+  });
+});
+
+function proposalInput(status: 'draft' | 'sent' | 'viewed' | 'accepted') {
+  return {
+    opportunity_id: 'o1',
+    status,
+    title: 'Growth proposal',
+    total_value: 9000,
+    setup_fee: null,
+    monthly_value: 1500,
+    valid_until: null,
+    document_url: null
+  };
+}
+
+describe('proposal versions and stamps', () => {
+  it('assigns the next version rather than trusting the form', async () => {
+    const recorder = new RecordingClient([{ version: 3 }]);
+    await createProposal(recorder.client(), proposalInput('draft'), null);
+
+    expect((recorder.last.payload as { version: number }).version).toBe(4);
+  });
+
+  it('starts at 1 for the first proposal on an opportunity', async () => {
+    const recorder = new RecordingClient([]);
+    expect(await nextProposalVersion(recorder.client(), 'o1')).toBe(1);
+  });
+
+  it('accumulates sent, viewed and accepted rather than keeping only the latest', async () => {
+    // The sequence is the point: a proposal sent, then viewed, then accepted
+    // should end with all three dates.
+    const recorder = new RecordingClient([{ id: 'p1' }]);
+    await createProposal(recorder.client(), proposalInput('accepted'), null);
+
+    const payload = recorder.last.payload as Record<string, string | null>;
+    expect(payload.sent_at).toMatch(/^\d{4}/);
+    expect(payload.viewed_at).toMatch(/^\d{4}/);
+    expect(payload.accepted_at).toMatch(/^\d{4}/);
+  });
+
+  it('does not stamp later milestones prematurely', async () => {
+    const recorder = new RecordingClient([{ id: 'p1' }]);
+    await createProposal(recorder.client(), proposalInput('sent'), null);
+
+    const payload = recorder.last.payload as Record<string, string | null>;
+    expect(payload.sent_at).toMatch(/^\d{4}/);
+    expect(payload.viewed_at).toBeNull();
+    expect(payload.accepted_at).toBeNull();
+  });
+
+  it('keeps an existing sent date when the status moves on', async () => {
+    const recorder = new RecordingClient([{ id: 'p1' }]);
+    const existing = { sent_at: '2026-02-01T09:00:00.000Z' } as never;
+    await updateProposal(recorder.client(), 'p1', proposalInput('accepted'), existing);
+
+    expect((recorder.last.payload as { sent_at: string }).sent_at).toBe('2026-02-01T09:00:00.000Z');
+  });
+});
+
+/**
+ * Object keys are scoped by owner and randomised. A key derived only from the
+ * file name would let a second upload of `contract.pdf` overwrite the first.
+ */
+describe('document storage paths', () => {
+  it('scopes by owner and never collides', () => {
+    const a = documentPath('leads', LEAD, 'contract.pdf');
+    const b = documentPath('leads', LEAD, 'contract.pdf');
+    expect(a).not.toBe(b);
+    expect(a.startsWith(`leads/${LEAD}/`)).toBe(true);
+    expect(a.endsWith('contract.pdf')).toBe(true);
+  });
+
+  it('strips characters that would break a key', () => {
+    const path = documentPath('clients', LEAD, '../../etc/pa ss wd?.pdf');
+    expect(path).not.toContain('..');
+    expect(path).not.toContain(' ');
+    expect(path).not.toContain('?');
+  });
+});
+
+describe('outreach steps', () => {
+  it('derives the next step number so two people do not both pick 3', async () => {
+    const recorder = new RecordingClient([{ step_number: 2 }]);
+    await createStep(recorder.client(), {
+      sequence_id: 's1',
+      channel: 'email',
+      delay_minutes: 0,
+      subject_template: null,
+      body_template: null,
+      active: true
+    });
+
+    expect((recorder.last.payload as { step_number: number }).step_number).toBe(3);
+  });
+
+  it('respects an explicit number when one is given', async () => {
+    const recorder = new RecordingClient([{ id: 'st1' }]);
+    await createStep(recorder.client(), {
+      sequence_id: 's1',
+      step_number: 1,
+      channel: 'call',
+      delay_minutes: 1440,
+      subject_template: null,
+      body_template: null,
+      active: true
+    });
+
+    expect((recorder.last.payload as { step_number: number }).step_number).toBe(1);
+    // No lookup query when the caller already knows.
+    expect(recorder.queries).toHaveLength(1);
+  });
+});

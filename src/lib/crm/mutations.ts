@@ -18,9 +18,17 @@ import type {
   Client,
   ClientStatus,
   Contact,
+  Contract,
+  ContractStatus,
+  CrmDocument,
   Note,
   Opportunity,
   OpportunityStage,
+  OutreachChannel,
+  OutreachSequence,
+  OutreachStep,
+  Proposal,
+  ProposalStatus,
   Task,
   TaskPriority,
   TaskStatus
@@ -380,4 +388,348 @@ export async function updateNote(
 export async function deleteNote(client: CrmSupabaseClient, id: string): Promise<void> {
   const { error } = await client.from('notes').delete().eq('id', id);
   if (error) throw new Error(`Could not delete the note: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
+// Contracts
+// ---------------------------------------------------------------------------
+export interface ContractInput {
+  client_id: string;
+  status: ContractStatus;
+  start_date: string | null;
+  end_date: string | null;
+  monthly_value: number | null;
+  setup_fee: number | null;
+  document_url: string | null;
+}
+
+/**
+ * `signed_at` follows the status, like every other derived timestamp here.
+ *
+ * A contract that has expired or been terminated was still signed at some
+ * point, so those statuses keep the date. Only going back to draft or sent
+ * clears it, because those are the states of a contract nobody has signed.
+ */
+function signatureStamp(status: ContractStatus, existing?: Contract | null): string | null {
+  if (status === 'draft' || status === 'sent') return null;
+  return existing?.signed_at ?? new Date().toISOString();
+}
+
+export async function createContract(
+  client: CrmSupabaseClient,
+  input: ContractInput
+): Promise<Contract> {
+  const result = await client
+    .from('contracts')
+    .insert({ ...input, signed_at: signatureStamp(input.status) })
+    .select()
+    .single();
+  return unwrapWrite(result, 'Could not create the contract') as Contract;
+}
+
+export async function updateContract(
+  client: CrmSupabaseClient,
+  id: string,
+  input: ContractInput,
+  existing?: Contract | null
+): Promise<Contract> {
+  const result = await client
+    .from('contracts')
+    .update({ ...input, signed_at: signatureStamp(input.status, existing) })
+    .eq('id', id)
+    .select()
+    .single();
+  return unwrapWrite(result, 'Could not update the contract') as Contract;
+}
+
+export async function deleteContract(client: CrmSupabaseClient, id: string): Promise<void> {
+  const { error } = await client.from('contracts').delete().eq('id', id);
+  if (error) throw new Error(`Could not delete the contract: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
+// Proposals
+// ---------------------------------------------------------------------------
+export interface ProposalInput {
+  opportunity_id: string;
+  status: ProposalStatus;
+  title: string | null;
+  total_value: number | null;
+  setup_fee: number | null;
+  monthly_value: number | null;
+  valid_until: string | null;
+  document_url: string | null;
+}
+
+/**
+ * Each status stamps its own moment and keeps it.
+ *
+ * A proposal that was sent, then viewed, then accepted should end up with all
+ * three dates — that sequence is the whole reason to record them. Deriving each
+ * from the current status alone would leave only the latest, so earlier stamps
+ * are preserved once set.
+ */
+function proposalStamps(status: ProposalStatus, existing?: Proposal | null) {
+  const now = new Date().toISOString();
+  const reached = (target: ProposalStatus, order: ProposalStatus[]) =>
+    order.indexOf(status) >= order.indexOf(target);
+  const progression: ProposalStatus[] = ['draft', 'sent', 'viewed', 'accepted'];
+
+  return {
+    sent_at:
+      existing?.sent_at ??
+      (progression.includes(status) && reached('sent', progression) ? now : null),
+    viewed_at:
+      existing?.viewed_at ??
+      (progression.includes(status) && reached('viewed', progression) ? now : null),
+    accepted_at: existing?.accepted_at ?? (status === 'accepted' ? now : null)
+  };
+}
+
+/**
+ * Versions are unique per opportunity, so the next one is derived rather than
+ * typed. Two people drafting at once can still collide; the unique violation
+ * becomes "That record already exists", which is accurate.
+ */
+export async function nextProposalVersion(
+  client: CrmSupabaseClient,
+  opportunityId: string
+): Promise<number> {
+  const { data, error } = await client
+    .from('proposals')
+    .select('version')
+    .eq('opportunity_id', opportunityId)
+    .order('version', { ascending: false })
+    .limit(1);
+  if (error) throw new Error(`Could not read proposal versions: ${error.message}`);
+  const highest = (data as { version: number }[] | null)?.[0]?.version ?? 0;
+  return highest + 1;
+}
+
+export async function createProposal(
+  client: CrmSupabaseClient,
+  input: ProposalInput,
+  createdBy: string | null
+): Promise<Proposal> {
+  const version = await nextProposalVersion(client, input.opportunity_id);
+  const result = await client
+    .from('proposals')
+    .insert({ ...input, version, created_by: createdBy, ...proposalStamps(input.status) })
+    .select()
+    .single();
+  return unwrapWrite(result, 'Could not create the proposal') as Proposal;
+}
+
+export async function updateProposal(
+  client: CrmSupabaseClient,
+  id: string,
+  input: ProposalInput,
+  existing?: Proposal | null
+): Promise<Proposal> {
+  const result = await client
+    .from('proposals')
+    .update({ ...input, ...proposalStamps(input.status, existing) })
+    .eq('id', id)
+    .select()
+    .single();
+  return unwrapWrite(result, 'Could not update the proposal') as Proposal;
+}
+
+export async function deleteProposal(client: CrmSupabaseClient, id: string): Promise<void> {
+  const { error } = await client.from('proposals').delete().eq('id', id);
+  if (error) throw new Error(`Could not delete the proposal: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
+// Documents
+// ---------------------------------------------------------------------------
+export const DOCUMENT_BUCKET = 'crm-documents';
+
+export interface DocumentInput {
+  crm_lead_id: string | null;
+  client_id: string | null;
+  name: string;
+  file: File;
+}
+
+/**
+ * A storage key that cannot collide and cannot be guessed from the file name.
+ *
+ * Scoped by owning record so a leaked path reveals only which lead it belongs
+ * to, and suffixed with a random segment so uploading `contract.pdf` twice does
+ * not overwrite the first one.
+ */
+export function documentPath(ownerKind: 'leads' | 'clients', ownerId: string, name: string): string {
+  const safe = name
+    .replace(/[^\w.\-]+/g, '_')
+    // `.` survives the character class above, so `../..` would otherwise reach
+    // the key intact. Storage keys are not filesystem paths, but backends
+    // normalise them differently and a traversal sequence has no business here.
+    .replace(/\.{2,}/g, '.')
+    .replace(/^[._-]+/, '')
+    .slice(-80);
+  const unique = crypto.randomUUID();
+  return `${ownerKind}/${ownerId}/${unique}-${safe || 'file'}`;
+}
+
+/**
+ * Upload the bytes, then record the metadata.
+ *
+ * Both halves run as the signed-in user, so storage RLS and table RLS each
+ * apply. If the metadata insert fails the object is removed again — an
+ * orphaned blob nobody can see or delete through the UI is worse than no file.
+ */
+export async function createDocument(
+  client: CrmSupabaseClient,
+  input: DocumentInput,
+  uploadedBy: string | null
+): Promise<CrmDocument> {
+  const ownerKind = input.crm_lead_id ? 'leads' : 'clients';
+  const ownerId = (input.crm_lead_id ?? input.client_id)!;
+  const path = documentPath(ownerKind, ownerId, input.name);
+
+  const upload = await client.storage.from(DOCUMENT_BUCKET).upload(path, input.file, {
+    contentType: input.file.type || 'application/octet-stream',
+    upsert: false
+  });
+  if (upload.error) throw new Error(`Could not upload the file: ${upload.error.message}`);
+
+  const result = await client
+    .from('documents')
+    .insert({
+      crm_lead_id: input.crm_lead_id,
+      client_id: input.client_id,
+      name: input.name,
+      storage_path: path,
+      mime_type: input.file.type || null,
+      file_size: input.file.size,
+      uploaded_by: uploadedBy
+    })
+    .select()
+    .single();
+
+  if (result.error) {
+    await client.storage.from(DOCUMENT_BUCKET).remove([path]);
+    throw new Error(`Could not record the document: ${result.error.message}`);
+  }
+  return result.data as CrmDocument;
+}
+
+/** Removes the object first: a row with no file is more confusing than neither. */
+export async function deleteDocument(
+  client: CrmSupabaseClient,
+  id: string,
+  storagePath: string
+): Promise<void> {
+  const removal = await client.storage.from(DOCUMENT_BUCKET).remove([storagePath]);
+  if (removal.error) throw new Error(`Could not delete the file: ${removal.error.message}`);
+
+  const { error } = await client.from('documents').delete().eq('id', id);
+  if (error) throw new Error(`Could not delete the document record: ${error.message}`);
+}
+
+/** A short-lived URL for a private object. */
+export async function documentDownloadUrl(
+  client: CrmSupabaseClient,
+  storagePath: string,
+  expiresInSeconds = 60
+): Promise<string> {
+  const { data, error } = await client.storage
+    .from(DOCUMENT_BUCKET)
+    .createSignedUrl(storagePath, expiresInSeconds);
+  if (error || !data) throw new Error(`Could not open the file: ${error?.message ?? 'no URL'}`);
+  return data.signedUrl;
+}
+
+// ---------------------------------------------------------------------------
+// Outreach sequences and steps
+// ---------------------------------------------------------------------------
+export interface SequenceInput {
+  name: string;
+  description: string | null;
+  active: boolean;
+}
+
+export async function createSequence(
+  client: CrmSupabaseClient,
+  input: SequenceInput,
+  createdBy: string | null
+): Promise<OutreachSequence> {
+  const result = await client
+    .from('outreach_sequences')
+    .insert({ ...input, created_by: createdBy })
+    .select()
+    .single();
+  return unwrapWrite(result, 'Could not create the sequence') as OutreachSequence;
+}
+
+export async function updateSequence(
+  client: CrmSupabaseClient,
+  id: string,
+  input: SequenceInput
+): Promise<OutreachSequence> {
+  const result = await client
+    .from('outreach_sequences')
+    .update(input)
+    .eq('id', id)
+    .select()
+    .single();
+  return unwrapWrite(result, 'Could not update the sequence') as OutreachSequence;
+}
+
+export async function deleteSequence(client: CrmSupabaseClient, id: string): Promise<void> {
+  const { error } = await client.from('outreach_sequences').delete().eq('id', id);
+  if (error) throw new Error(`Could not delete the sequence: ${error.message}`);
+}
+
+export interface StepInput {
+  sequence_id: string;
+  step_number: number;
+  channel: OutreachChannel;
+  delay_minutes: number;
+  subject_template: string | null;
+  body_template: string | null;
+  active: boolean;
+}
+
+/** Steps are numbered uniquely within a sequence, so the next one is derived. */
+export async function nextStepNumber(
+  client: CrmSupabaseClient,
+  sequenceId: string
+): Promise<number> {
+  const { data, error } = await client
+    .from('outreach_steps')
+    .select('step_number')
+    .eq('sequence_id', sequenceId)
+    .order('step_number', { ascending: false })
+    .limit(1);
+  if (error) throw new Error(`Could not read the sequence steps: ${error.message}`);
+  return ((data as { step_number: number }[] | null)?.[0]?.step_number ?? 0) + 1;
+}
+
+export async function createStep(
+  client: CrmSupabaseClient,
+  input: Omit<StepInput, 'step_number'> & { step_number?: number }
+): Promise<OutreachStep> {
+  const step_number = input.step_number ?? (await nextStepNumber(client, input.sequence_id));
+  const result = await client
+    .from('outreach_steps')
+    .insert({ ...input, step_number })
+    .select()
+    .single();
+  return unwrapWrite(result, 'Could not add the step') as OutreachStep;
+}
+
+export async function updateStep(
+  client: CrmSupabaseClient,
+  id: string,
+  input: StepInput
+): Promise<OutreachStep> {
+  const result = await client.from('outreach_steps').update(input).eq('id', id).select().single();
+  return unwrapWrite(result, 'Could not update the step') as OutreachStep;
+}
+
+export async function deleteStep(client: CrmSupabaseClient, id: string): Promise<void> {
+  const { error } = await client.from('outreach_steps').delete().eq('id', id);
+  if (error) throw new Error(`Could not delete the step: ${error.message}`);
 }

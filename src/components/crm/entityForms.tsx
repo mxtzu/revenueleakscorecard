@@ -10,6 +10,7 @@
 import {
   CheckboxField,
   Disclosure,
+  Label,
   FormGrid,
   ReturnTo,
   SelectField,
@@ -25,14 +26,21 @@ import { noteText } from '@/lib/crm/mutations';
 import {
   APPOINTMENT_STATUSES,
   CLIENT_STATUSES,
+  CONTRACT_STATUSES,
   OPPORTUNITY_STAGES,
+  OUTREACH_CHANNELS,
+  PROPOSAL_STATUSES,
   TASK_PRIORITIES,
   TASK_STATUSES,
   type Appointment,
   type Client,
   type Contact,
+  type Contract,
   type Note,
   type Opportunity,
+  type OutreachSequence,
+  type OutreachStep,
+  type Proposal,
   type Task
 } from '@/lib/crm/types';
 
@@ -501,6 +509,293 @@ export function NoteForm({
         placeholder="What you want to remember about this account."
       />
       <SubmitButton>{note ? 'Save note' : 'Add note'}</SubmitButton>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+export function ContractForm({
+  action,
+  returnTo,
+  clientId,
+  contract
+}: {
+  action: Action;
+  returnTo: string;
+  clientId: string;
+  contract?: Contract;
+}) {
+  return (
+    <form action={action} className="space-y-3">
+      <Hidden name="id" value={contract?.id} />
+      <input type="hidden" name="client_id" value={clientId} />
+      <ReturnTo path={returnTo} />
+
+      <FormGrid>
+        <SelectField
+          name="status"
+          label="Status"
+          options={optionsFrom(CONTRACT_STATUSES)}
+          defaultValue={contract?.status ?? 'draft'}
+        />
+        <TextField
+          name="monthly_value"
+          label="Monthly value"
+          type="number"
+          hint="(£)"
+          defaultValue={contract?.monthly_value?.toString()}
+        />
+        <TextField
+          name="setup_fee"
+          label="Setup fee"
+          type="number"
+          hint="(£)"
+          defaultValue={contract?.setup_fee?.toString()}
+        />
+        <TextField
+          name="start_date"
+          label="Start date"
+          type="date"
+          defaultValue={toDateInput(contract?.start_date)}
+        />
+        <TextField
+          name="end_date"
+          label="End date"
+          type="date"
+          defaultValue={toDateInput(contract?.end_date)}
+        />
+        <TextField
+          name="document_url"
+          label="Signed copy"
+          type="url"
+          hint="(link)"
+          placeholder="https://…"
+          defaultValue={contract?.document_url}
+        />
+      </FormGrid>
+
+      <p className="text-xs text-white/35">
+        The signature date follows the status — draft and sent clear it, anything further sets it.
+      </p>
+      <SubmitButton>{contract ? 'Save contract' : 'Add contract'}</SubmitButton>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+export function ProposalForm({
+  action,
+  returnTo,
+  opportunityId,
+  proposal
+}: {
+  action: Action;
+  returnTo: string;
+  opportunityId: string;
+  proposal?: Proposal;
+}) {
+  return (
+    <form action={action} className="space-y-3">
+      <Hidden name="id" value={proposal?.id} />
+      <input type="hidden" name="opportunity_id" value={opportunityId} />
+      <ReturnTo path={returnTo} />
+
+      <TextField
+        name="title"
+        label="Title"
+        defaultValue={proposal?.title}
+        placeholder="Invisalign growth proposal"
+      />
+
+      <FormGrid>
+        <SelectField
+          name="status"
+          label="Status"
+          options={optionsFrom(PROPOSAL_STATUSES)}
+          defaultValue={proposal?.status ?? 'draft'}
+        />
+        <TextField
+          name="total_value"
+          label="Total value"
+          type="number"
+          hint="(£)"
+          defaultValue={proposal?.total_value?.toString()}
+        />
+        <TextField
+          name="monthly_value"
+          label="Monthly"
+          type="number"
+          hint="(£)"
+          defaultValue={proposal?.monthly_value?.toString()}
+        />
+        <TextField
+          name="setup_fee"
+          label="Setup fee"
+          type="number"
+          hint="(£)"
+          defaultValue={proposal?.setup_fee?.toString()}
+        />
+        <TextField
+          name="valid_until"
+          label="Valid until"
+          type="date"
+          defaultValue={toDateInput(proposal?.valid_until)}
+        />
+        <TextField
+          name="document_url"
+          label="Document"
+          type="url"
+          hint="(link)"
+          placeholder="https://…"
+          defaultValue={proposal?.document_url}
+        />
+      </FormGrid>
+
+      <p className="text-xs text-white/35">
+        {proposal
+          ? `Version ${proposal.version}. Sent, viewed and accepted dates are stamped by the status and then kept.`
+          : 'The version number is assigned automatically.'}
+      </p>
+      <SubmitButton>{proposal ? 'Save proposal' : 'Create proposal'}</SubmitButton>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+export function DocumentUploadForm({
+  action,
+  returnTo,
+  leadId,
+  clientId
+}: {
+  action: Action;
+  returnTo: string;
+  leadId?: string;
+  clientId?: string;
+}) {
+  return (
+    <form action={action} encType="multipart/form-data" className="space-y-3">
+      <Hidden name="crm_lead_id" value={leadId} />
+      <Hidden name="client_id" value={clientId} />
+      <ReturnTo path={returnTo} />
+
+      <label className="block">
+        <Label hint="(max 25 MB)">File</Label>
+        <input
+          type="file"
+          name="file"
+          required
+          className="mt-1.5 w-full rounded-lg border border-line bg-ink-800 px-3 py-2 text-sm text-white file:mr-3 file:rounded file:border-0 file:bg-white/10 file:px-3 file:py-1 file:text-xs file:text-white/80"
+        />
+      </label>
+      <TextField name="name" label="Label" hint="(optional)" placeholder="Signed contract" />
+
+      <p className="text-xs text-white/35">
+        Stored in a private bucket and served through short-lived links. Executables, scripts and
+        HTML are refused.
+      </p>
+      <SubmitButton>Upload</SubmitButton>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+export function SequenceForm({
+  action,
+  returnTo,
+  sequence
+}: {
+  action: Action;
+  returnTo: string;
+  sequence?: OutreachSequence;
+}) {
+  return (
+    <form action={action} className="space-y-3">
+      <Hidden name="id" value={sequence?.id} />
+      <ReturnTo path={returnTo} />
+
+      <TextField
+        name="name"
+        label="Sequence name"
+        required
+        defaultValue={sequence?.name}
+        placeholder="Dental practices — first touch"
+      />
+      <TextAreaField
+        name="description"
+        label="Description"
+        rows={2}
+        defaultValue={sequence?.description}
+        placeholder="Who this is for and what it is trying to achieve."
+      />
+      <CheckboxField
+        name="active"
+        label="Active"
+        defaultChecked={sequence?.active ?? true}
+        hint="Marks the sequence as current. Nothing is sent either way."
+      />
+      <SubmitButton>{sequence ? 'Save sequence' : 'Create sequence'}</SubmitButton>
+    </form>
+  );
+}
+
+export function StepForm({
+  action,
+  returnTo,
+  sequenceId,
+  step
+}: {
+  action: Action;
+  returnTo: string;
+  sequenceId: string;
+  step?: OutreachStep;
+}) {
+  return (
+    <form action={action} className="space-y-3">
+      <Hidden name="id" value={step?.id} />
+      <input type="hidden" name="sequence_id" value={sequenceId} />
+      <ReturnTo path={returnTo} />
+
+      <FormGrid>
+        <SelectField
+          name="channel"
+          label="Channel"
+          options={optionsFrom(OUTREACH_CHANNELS)}
+          defaultValue={step?.channel ?? 'email'}
+        />
+        <TextField
+          name="delay_minutes"
+          label="Delay"
+          type="number"
+          hint="(minutes after the previous step)"
+          defaultValue={step?.delay_minutes?.toString() ?? '0'}
+        />
+        {step ? (
+          <TextField
+            name="step_number"
+            label="Step number"
+            type="number"
+            defaultValue={step.step_number.toString()}
+          />
+        ) : null}
+      </FormGrid>
+
+      <TextField
+        name="subject_template"
+        label="Subject"
+        defaultValue={step?.subject_template}
+        placeholder="Quick question about {{company_name}}"
+      />
+      <TextAreaField
+        name="body_template"
+        label="Body"
+        rows={5}
+        defaultValue={step?.body_template}
+        placeholder="Write the message. Nothing in the CRM sends it."
+      />
+      <CheckboxField name="active" label="Active" defaultChecked={step?.active ?? true} />
+
+      <SubmitButton>{step ? 'Save step' : 'Add step'}</SubmitButton>
     </form>
   );
 }

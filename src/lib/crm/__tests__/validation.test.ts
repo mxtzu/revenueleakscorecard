@@ -167,3 +167,65 @@ describe('readableWriteError', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Uploads and links
+// ---------------------------------------------------------------------------
+import { MAX_UPLOAD_BYTES, optionalUrl, uploadedFile } from '../validation';
+
+function formWithFile(name: string, bytes: number, type = 'application/pdf'): FormData {
+  const data = new FormData();
+  data.append('file', new File([new Uint8Array(bytes)], name, { type }));
+  return data;
+}
+
+describe('uploads', () => {
+  it('accepts an ordinary document', () => {
+    const file = uploadedFile(formWithFile('contract.pdf', 1024), 'file');
+    expect(file.name).toBe('contract.pdf');
+  });
+
+  it('requires a file to have been chosen', () => {
+    expect(() => uploadedFile(new FormData(), 'file')).toThrow(/Choose a file/);
+    expect(() => uploadedFile(formWithFile('empty.pdf', 0), 'file')).toThrow(/Choose a file/);
+  });
+
+  it('states the size in the error rather than just refusing', () => {
+    expect(() => uploadedFile(formWithFile('big.pdf', MAX_UPLOAD_BYTES + 1), 'file')).toThrow(
+      /the limit is 25 MB/
+    );
+  });
+
+  /**
+   * The bucket is private and served through signed URLs, so this is not the
+   * last line of defence — but an uploaded HTML or SVG file opened from a
+   * signed URL is a stored-XSS delivery mechanism aimed at whoever clicks it.
+   */
+  it('refuses executables, scripts and anything that renders as a page', () => {
+    for (const name of ['setup.exe', 'run.sh', 'payload.js', 'invoice.html', 'logo.svg']) {
+      expect(() => uploadedFile(formWithFile(name, 512), 'file')).toThrow(/cannot be stored/);
+    }
+  });
+
+  it('is not fooled by the declared MIME type', () => {
+    // The browser sets Content-Type; only the extension is trusted here.
+    expect(() => uploadedFile(formWithFile('x.html', 512, 'application/pdf'), 'file')).toThrow(
+      /cannot be stored/
+    );
+  });
+});
+
+describe('document links', () => {
+  it('accepts http and https', () => {
+    expect(optionalUrl(form({ u: 'https://example.com/a.pdf' }), 'u', 'Doc')).toBe(
+      'https://example.com/a.pdf'
+    );
+    expect(optionalUrl(form({ u: '' }), 'u', 'Doc')).toBeNull();
+  });
+
+  it('rejects scheme-based scripting holes', () => {
+    for (const value of ['javascript:alert(1)', 'data:text/html,<script>x</script>', 'not a url']) {
+      expect(() => optionalUrl(form({ u: value }), 'u', 'Doc')).toThrow();
+    }
+  });
+});

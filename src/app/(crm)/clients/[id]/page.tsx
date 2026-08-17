@@ -22,9 +22,22 @@ import {
   Row,
   Table
 } from '@/components/crm/ui';
-import { ClientForm, NoteForm, TaskForm } from '@/components/crm/entityForms';
+import {
+  ClientForm,
+  ContractForm,
+  DocumentUploadForm,
+  NoteForm,
+  TaskForm
+} from '@/components/crm/entityForms';
 import { ActionError, DeleteForm, Disclosure, ReadOnlyNotice } from '@/components/crm/forms';
-import { formatDate, formatDateTime, formatMoney, humanise, orDash } from '@/lib/crm/format';
+import {
+  formatDate,
+  formatDateTime,
+  formatFileSize,
+  formatMoney,
+  humanise,
+  orDash
+} from '@/lib/crm/format';
 import { noteText } from '@/lib/crm/mutations';
 import { canWrite, isAdmin } from '@/lib/crm/permissions';
 import {
@@ -32,6 +45,7 @@ import {
   listActivitiesForClient,
   listAssignableProfiles,
   listContractsForClient,
+  listDocumentsForClient,
   listNotesForClient,
   listPaymentsForClient
 } from '@/lib/crm/queries';
@@ -39,6 +53,12 @@ import { crmSession } from '@/lib/crm/server';
 import type { ClientStatus, PaymentStatus } from '@/lib/crm/types';
 
 import { removeClient, removeNote, saveClient, saveNote, saveTask } from '../../_actions/crud';
+import {
+  removeContract,
+  removeDocument,
+  saveContract,
+  uploadDocument
+} from '../../_actions/records';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,11 +90,12 @@ export default async function ClientDetailPage({
   const account = await getClientById(supabase, params.id);
   if (!account) notFound();
 
-  const [contracts, payments, activities, notes, team] = await Promise.all([
+  const [contracts, payments, activities, notes, documents, team] = await Promise.all([
     listContractsForClient(supabase, account.id),
     listPaymentsForClient(supabase, account.id),
     listActivitiesForClient(supabase, account.id),
     listNotesForClient(supabase, account.id),
+    listDocumentsForClient(supabase, account.id),
     listAssignableProfiles(supabase)
   ]);
 
@@ -223,7 +244,7 @@ export default async function ClientDetailPage({
           {contracts.length === 0 ? (
             <EmptyState title="No contracts recorded" />
           ) : (
-            <Table head={['Status', 'Term', 'Monthly', 'Setup', 'Signed']}>
+            <Table head={['Status', 'Term', 'Monthly', 'Setup', 'Signed', '']}>
               {contracts.map((contract) => (
                 <Row key={contract.id}>
                   <Cell>
@@ -239,10 +260,95 @@ export default async function ClientDetailPage({
                   <Cell className="whitespace-nowrap text-white/45">
                     {formatDateTime(contract.signed_at)}
                   </Cell>
+                  <Cell>
+                    {writable ? (
+                      <div className="flex min-w-[110px] flex-col items-start gap-1.5">
+                        <Disclosure summary="Edit">
+                          <div className="min-w-[320px] py-2">
+                            <ContractForm
+                              action={saveContract}
+                              returnTo={here}
+                              clientId={account.id}
+                              contract={contract}
+                            />
+                          </div>
+                        </Disclosure>
+                        <DeleteForm
+                          action={removeContract}
+                          id={contract.id}
+                          hidden={{ client_id: account.id, return_to: here }}
+                          label="Delete"
+                          warning="An expired or terminated contract is better recorded as such than removed."
+                          allowed={deletable}
+                        />
+                      </div>
+                    ) : null}
+                  </Cell>
                 </Row>
               ))}
             </Table>
           )}
+
+          <div className="mt-4 border-t border-line-soft pt-4">
+            {writable ? (
+              <Disclosure summary="Add a contract" tone="primary">
+                <ContractForm action={saveContract} returnTo={here} clientId={account.id} />
+              </Disclosure>
+            ) : (
+              <ReadOnlyNotice what="add contracts" />
+            )}
+          </div>
+        </Card>
+
+        <Card title="Documents" description="Held in a private bucket; links expire after a minute.">
+          {documents.length === 0 ? (
+            <EmptyState title="No documents" />
+          ) : (
+            <ul className="space-y-2">
+              {documents.map((document) => (
+                <li
+                  key={document.id}
+                  className="rounded-lg border border-line-soft px-3 py-2.5"
+                >
+                  <a
+                    href={`/api/crm/documents/${document.id}`}
+                    className="text-sm text-electric-300 hover:underline"
+                  >
+                    {document.name}
+                  </a>
+                  <p className="mt-1 text-xs text-white/35">
+                    {formatFileSize(document.file_size)} · {orDash(document.mime_type)} ·{' '}
+                    {formatDateTime(document.created_at)}
+                  </p>
+                  {writable ? (
+                    <div className="mt-2 border-t border-line-soft pt-2">
+                      <DeleteForm
+                        action={removeDocument}
+                        id={document.id}
+                        hidden={{ client_id: account.id, return_to: here }}
+                        label="Delete file"
+                        warning="The stored file is deleted too. This cannot be undone."
+                        allowed={deletable}
+                      />
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="mt-4 border-t border-line-soft pt-4">
+            {writable ? (
+              <Disclosure summary="Upload a document" tone="primary">
+                <DocumentUploadForm
+                  action={uploadDocument}
+                  returnTo={here}
+                  clientId={account.id}
+                />
+              </Disclosure>
+            ) : (
+              <ReadOnlyNotice what="upload documents" />
+            )}
+          </div>
         </Card>
 
         <Card

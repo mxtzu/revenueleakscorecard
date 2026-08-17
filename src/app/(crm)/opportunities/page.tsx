@@ -18,15 +18,21 @@ import {
   StatCard,
   Table
 } from '@/components/crm/ui';
-import { ClientForm, OpportunityForm } from '@/components/crm/entityForms';
+import { ClientForm, OpportunityForm, ProposalForm } from '@/components/crm/entityForms';
 import { ActionError, DeleteForm, Disclosure, ReadOnlyNotice } from '@/components/crm/forms';
 import { formatDate, formatMoney, humanise, orDash } from '@/lib/crm/format';
 import { canWrite, isAdmin } from '@/lib/crm/permissions';
-import { listAssignableProfiles, listLeads, listOpportunities } from '@/lib/crm/queries';
+import {
+  listAssignableProfiles,
+  listLeads,
+  listOpportunities,
+  listProposals
+} from '@/lib/crm/queries';
 import { crmSession } from '@/lib/crm/server';
 import type { Opportunity, OpportunityStage } from '@/lib/crm/types';
 
 import { removeOpportunity, saveClient, saveOpportunity } from '../_actions/crud';
+import { removeProposal, saveProposal } from '../_actions/records';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,11 +57,21 @@ export default async function OpportunitiesPage({
   searchParams?: { error?: string };
 }) {
   const { client, profile } = await crmSession();
-  const [opportunities, team, leads] = await Promise.all([
+  const [opportunities, team, leads, proposals] = await Promise.all([
     listOpportunities(client, 300),
     listAssignableProfiles(client),
-    listLeads(client, { limit: 300 })
+    listLeads(client, { limit: 300 }),
+    listProposals(client, 500)
   ]);
+
+  // Grouped once rather than queried per row: a proposal list per opportunity
+  // would be one round trip each.
+  const proposalsByOpportunity = new Map<string, typeof proposals>();
+  for (const proposal of proposals) {
+    const bucket = proposalsByOpportunity.get(proposal.opportunity_id) ?? [];
+    bucket.push(proposal);
+    proposalsByOpportunity.set(proposal.opportunity_id, bucket);
+  }
 
   const writable = canWrite(profile);
   const deletable = isAdmin(profile);
@@ -166,6 +182,69 @@ export default async function OpportunitiesPage({
                             opportunity={opportunity}
                             people={people}
                           />
+                        </div>
+                      </Disclosure>
+
+                      <Disclosure
+                        summary={`Proposals (${proposalsByOpportunity.get(opportunity.id)?.length ?? 0})`}
+                      >
+                        <div className="min-w-[320px] space-y-3 py-2">
+                          {(proposalsByOpportunity.get(opportunity.id) ?? []).map((proposal) => (
+                            <div
+                              key={proposal.id}
+                              className="rounded-lg border border-line-soft px-3 py-2.5"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-sm text-white/85">
+                                  v{proposal.version} {proposal.title ?? ''}
+                                </span>
+                                <Badge
+                                  tone={proposal.status === 'accepted' ? 'positive' : 'neutral'}
+                                >
+                                  {humanise(proposal.status)}
+                                </Badge>
+                              </div>
+                              <p className="mt-1 text-xs text-white/40">
+                                {formatMoney(proposal.total_value)} · valid to{' '}
+                                {formatDate(proposal.valid_until)}
+                              </p>
+                              {proposal.document_url ? (
+                                <a
+                                  href={proposal.document_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer nofollow"
+                                  className="mt-1 inline-block text-xs text-electric-300 hover:underline"
+                                >
+                                  Open document
+                                </a>
+                              ) : null}
+                              <div className="mt-2 space-y-2 border-t border-line-soft pt-2">
+                                <Disclosure summary="Edit">
+                                  <ProposalForm
+                                    action={saveProposal}
+                                    returnTo="/opportunities"
+                                    opportunityId={opportunity.id}
+                                    proposal={proposal}
+                                  />
+                                </Disclosure>
+                                <DeleteForm
+                                  action={removeProposal}
+                                  id={proposal.id}
+                                  hidden={{ return_to: '/opportunities' }}
+                                  label="Delete"
+                                  warning="Proposal versions are a record of what was offered and when."
+                                  allowed={deletable}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                          <Disclosure summary="New proposal" tone="primary">
+                            <ProposalForm
+                              action={saveProposal}
+                              returnTo="/opportunities"
+                              opportunityId={opportunity.id}
+                            />
+                          </Disclosure>
                         </div>
                       </Disclosure>
                       {opportunity.stage === 'won' ? (

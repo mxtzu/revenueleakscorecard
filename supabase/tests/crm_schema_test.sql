@@ -387,6 +387,108 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+\echo '== document storage =='
+-- ---------------------------------------------------------------------------
+-- The bucket must be private and its object policies must mirror the CRM's.
+-- Getting the table policy right and leaving the object policy open is the
+-- classic way to leak files while the database looks locked down.
+do $$
+begin
+  perform pg_temp.assert(
+    exists (select 1 from storage.buckets where id = 'crm-documents' and public = false),
+    'the crm-documents bucket exists and is private'
+  );
+  perform pg_temp.assert(
+    (select file_size_limit from storage.buckets where id = 'crm-documents') = 26214400,
+    'the bucket caps uploads at 25 MiB'
+  );
+  perform pg_temp.assert(
+    (select relrowsecurity from pg_class where oid = 'storage.objects'::regclass),
+    'RLS is enabled on storage.objects'
+  );
+  perform pg_temp.assert(
+    exists (select 1 from pg_policies where schemaname = 'storage'
+             and tablename = 'objects' and policyname = 'crm_documents_read'),
+    'stored files are readable only through a CRM policy'
+  );
+  perform pg_temp.assert(
+    exists (select 1 from pg_policies where schemaname = 'storage'
+             and tablename = 'objects' and policyname = 'crm_documents_write'
+               and cmd = 'INSERT'),
+    'uploads are gated by a CRM policy'
+  );
+  perform pg_temp.assert(
+    exists (select 1 from pg_policies where schemaname = 'storage'
+             and tablename = 'objects' and policyname = 'crm_documents_delete'
+               and cmd = 'DELETE'),
+    'file deletion is gated by a CRM policy'
+  );
+  perform pg_temp.assert(
+    exists (select 1 from pg_indexes where schemaname = 'public'
+             and indexname = 'proposals_opportunity_id_idx'),
+    'proposals are indexed by opportunity'
+  );
+  perform pg_temp.assert(
+    exists (select 1 from pg_indexes where schemaname = 'public'
+             and indexname = 'outreach_steps_sequence_id_idx'),
+    'outreach steps are indexed by sequence and order'
+  );
+end;
+$$;
+
+-- Proposal versions are unique per opportunity, which is what lets the version
+-- number be derived instead of typed.
+do $$
+declare
+  lead_id uuid; opp_id uuid; violated boolean := false;
+begin
+  insert into public.crm_leads (external_lead_id) values ('ext_proposal') returning id into lead_id;
+  insert into public.opportunities (crm_lead_id, name) values (lead_id, 'Deal')
+    returning id into opp_id;
+  insert into public.proposals (opportunity_id, version) values (opp_id, 1);
+  begin
+    insert into public.proposals (opportunity_id, version) values (opp_id, 1);
+    violated := true;
+  exception when unique_violation then
+    violated := false;
+  end;
+  perform pg_temp.assert(not violated, 'two proposals cannot share a version');
+
+  insert into public.proposals (opportunity_id, version) values (opp_id, 2);
+  perform pg_temp.assert(
+    (select count(*) from public.proposals where opportunity_id = opp_id) = 2,
+    'successive versions coexist'
+  );
+end;
+$$;
+
+-- A sequence a lead is enrolled in must not be deletable: the enrolment row
+-- would lose the definition of what it is running.
+do $$
+declare
+  lead_id uuid; seq_id uuid; blocked boolean := false;
+begin
+  insert into public.crm_leads (external_lead_id) values ('ext_outreach') returning id into lead_id;
+  insert into public.outreach_sequences (name) values ('First touch') returning id into seq_id;
+  insert into public.outreach_steps (sequence_id, step_number, channel)
+    values (seq_id, 1, 'email');
+  insert into public.lead_outreach (crm_lead_id, sequence_id) values (lead_id, seq_id);
+
+  begin
+    delete from public.outreach_sequences where id = seq_id;
+  exception when foreign_key_violation then
+    blocked := true;
+  end;
+  perform pg_temp.assert(blocked, 'a sequence with an enrolled lead cannot be deleted');
+
+  perform pg_temp.assert(
+    (select count(*) from public.outreach_steps where sequence_id = seq_id) = 1,
+    'its steps are still there'
+  );
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 \echo '== row level security =='
 -- ---------------------------------------------------------------------------
 -- lead_intelligence and payments must have NO user-facing write policy: the

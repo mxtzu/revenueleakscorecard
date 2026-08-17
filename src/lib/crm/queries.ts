@@ -13,13 +13,18 @@ import type {
   Client,
   Contact,
   Contract,
+  CrmDocument,
   CrmLead,
   CrmLeadWithIntelligence,
   LeadDetail,
   LeadIntelligence,
   Opportunity,
+  LeadOutreach,
   Note,
+  OutreachSequence,
+  OutreachStep,
   Payment,
+  Proposal,
   PipelineStage,
   PipelineStageHistoryEntry,
   Profile,
@@ -420,6 +425,110 @@ export async function listActivitiesForClient(
     .order('occurred_at', { ascending: false })
     .limit(limit);
   return unwrap<Activity[]>(result, 'listActivitiesForClient');
+}
+
+// ---------------------------------------------------------------------------
+// Proposals, contracts, documents
+// ---------------------------------------------------------------------------
+export async function listProposalsForOpportunity(
+  client: CrmSupabaseClient,
+  opportunityId: string
+): Promise<Proposal[]> {
+  const result = await client
+    .from('proposals')
+    .select('*')
+    .eq('opportunity_id', opportunityId)
+    .order('version', { ascending: false });
+  return unwrap<Proposal[]>(result, 'listProposalsForOpportunity');
+}
+
+/** Every proposal across the pipeline, newest first. */
+export async function listProposals(
+  client: CrmSupabaseClient,
+  limit = 200
+): Promise<Proposal[]> {
+  const result = await client
+    .from('proposals')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return unwrap<Proposal[]>(result, 'listProposals');
+}
+
+export async function listDocumentsForLead(
+  client: CrmSupabaseClient,
+  leadId: string
+): Promise<CrmDocument[]> {
+  const result = await client
+    .from('documents')
+    .select('*')
+    .eq('crm_lead_id', leadId)
+    .order('created_at', { ascending: false });
+  return unwrap<CrmDocument[]>(result, 'listDocumentsForLead');
+}
+
+export async function listDocumentsForClient(
+  client: CrmSupabaseClient,
+  clientId: string
+): Promise<CrmDocument[]> {
+  const result = await client
+    .from('documents')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false });
+  return unwrap<CrmDocument[]>(result, 'listDocumentsForClient');
+}
+
+export async function getDocumentById(
+  client: CrmSupabaseClient,
+  id: string
+): Promise<CrmDocument | null> {
+  const result = await client.from('documents').select('*').eq('id', id).maybeSingle();
+  if (result.error) throw new Error(`CRM query failed (getDocumentById): ${result.error.message}`);
+  return (result.data as CrmDocument) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Outreach
+// ---------------------------------------------------------------------------
+export async function listOutreachSequences(
+  client: CrmSupabaseClient
+): Promise<OutreachSequence[]> {
+  const result = await client
+    .from('outreach_sequences')
+    .select('*')
+    .order('created_at', { ascending: true });
+  return unwrap<OutreachSequence[]>(result, 'listOutreachSequences');
+}
+
+export async function listOutreachSteps(
+  client: CrmSupabaseClient,
+  sequenceId?: string
+): Promise<OutreachStep[]> {
+  let query = client.from('outreach_steps').select('*');
+  if (sequenceId) query = query.eq('sequence_id', sequenceId);
+  const result = await query.order('step_number', { ascending: true });
+  return unwrap<OutreachStep[]>(result, 'listOutreachSteps');
+}
+
+/**
+ * Enrolment rows for one lead.
+ *
+ * Nothing in the CRM enrols a lead — the outreach engine is deliberately not
+ * built. The rows exist because `halt_outreach_on_inbound_reply` writes to them,
+ * and because an external runner may. Showing them read-only means state that
+ * something else changed is at least visible.
+ */
+export async function listOutreachForLead(
+  client: CrmSupabaseClient,
+  leadId: string
+): Promise<LeadOutreach[]> {
+  const result = await client
+    .from('lead_outreach')
+    .select('*')
+    .eq('crm_lead_id', leadId)
+    .order('created_at', { ascending: false });
+  return unwrap<LeadOutreach[]>(result, 'listOutreachForLead');
 }
 
 // ---------------------------------------------------------------------------
