@@ -8,6 +8,7 @@
 
 import Link from 'next/link';
 
+import { ImportLeads } from '@/components/crm/ImportLeads';
 import {
   AdvertisingBadge,
   Card,
@@ -46,6 +47,7 @@ export default async function LeadsPage({ searchParams }: { searchParams?: Searc
         eyebrow="Research"
         title="Leads"
         description="Businesses discovered and scored by the lead pipeline. Sales state lives here; the underlying research is a read-only snapshot."
+        actions={<ImportLeads />}
       />
 
       <Card className="mb-4">
@@ -107,7 +109,7 @@ export default async function LeadsPage({ searchParams }: { searchParams?: Searc
         {leads.length === 0 ? (
           <EmptyState
             title="No leads match"
-            description="Import a pipeline export with `npm run sync:leads -- --file <export.json>`, or widen the filters."
+            description="Import a pipeline export with the Import leads button above, or widen the filters."
           />
         ) : (
           <Table head={['Business', 'Contact', 'Location', 'Score', 'Ads', 'Stage', 'Owner', 'Updated']}>
