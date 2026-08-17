@@ -52,6 +52,7 @@ import {
 } from '@/lib/crm/types';
 import {
   bool,
+  emailList,
   enumValue,
   optionalDate,
   optionalInt,
@@ -219,7 +220,12 @@ function appointmentFields(form: FormData) {
     timezone: zone,
     status: enumValue(form, 'status', APPOINTMENT_STATUSES, 'Status', 'scheduled'),
     meeting_notes: optionalText(form, 'meeting_notes'),
-    outcome: optionalText(form, 'outcome')
+    outcome: optionalText(form, 'outcome'),
+    // Calendar fields. `sync_state` is not among them: the database sets it
+    // when a synced field changes, so a form cannot claim to be in sync.
+    attendee_emails: emailList(form, 'attendee_emails'),
+    conference_requested: bool(form, 'conference_requested'),
+    notify_attendees: bool(form, 'notify_attendees')
   };
   if (fields.ends_at && fields.ends_at < fields.starts_at) {
     throw new ValidationError('The end time cannot be before the start time.');

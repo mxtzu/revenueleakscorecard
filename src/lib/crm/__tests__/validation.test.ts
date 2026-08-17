@@ -229,3 +229,46 @@ describe('document links', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Attendees
+// ---------------------------------------------------------------------------
+import { emailList } from '../validation';
+
+/**
+ * The one field where a validation slip leaves the building: an appointment
+ * with notifications on hands these addresses to Google, which emails them.
+ */
+describe('attendee emails', () => {
+  it('splits on commas, semicolons and newlines', () => {
+    expect(emailList(form({ a: 'one@x.co.uk, two@y.com;three@z.io' }), 'a')).toEqual([
+      'one@x.co.uk',
+      'two@y.com',
+      'three@z.io'
+    ]);
+    expect(emailList(form({ a: 'one@x.com\ntwo@y.com' }), 'a')).toEqual([
+      'one@x.com',
+      'two@y.com'
+    ]);
+  });
+
+  it('treats no attendees as an empty list, not a blank one', () => {
+    expect(emailList(form({ a: '' }), 'a')).toEqual([]);
+    expect(emailList(form({}), 'a')).toEqual([]);
+    expect(emailList(form({ a: ' , , ' }), 'a')).toEqual([]);
+  });
+
+  it('collapses the same person added twice', () => {
+    expect(emailList(form({ a: 'Owner@Practice.test, owner@practice.test' }), 'a')).toEqual([
+      'owner@practice.test'
+    ]);
+  });
+
+  it('names a bad address rather than quietly dropping it', () => {
+    // A silently discarded attendee is someone who never gets invited and
+    // nobody finds out until the call.
+    for (const bad of ['not-an-email', 'missing@tld', '@nodomain.com', 'spaces in@x.com']) {
+      expect(() => emailList(form({ a: `good@x.com, ${bad}` }), 'a')).toThrow(/not a valid email/);
+    }
+  });
+});

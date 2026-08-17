@@ -46,6 +46,16 @@ import {
 
 type Action = (formData: FormData) => void | Promise<void>;
 
+/** Open the calendar section straight away when it already holds something. */
+function hasCalendarDetail(appointment?: Appointment): boolean {
+  return Boolean(
+    appointment &&
+      ((appointment.attendee_emails?.length ?? 0) > 0 ||
+        appointment.conference_requested ||
+        appointment.google_meet_url)
+  );
+}
+
 function Hidden({ name, value }: { name: string; value?: string | null }) {
   return value ? <input type="hidden" name={name} value={value} /> : null;
 }
@@ -170,13 +180,16 @@ export function AppointmentForm({
   returnTo,
   appointment,
   leadId,
-  contacts = []
+  contacts = [],
+  calendarConnected = false
 }: {
   action: Action;
   returnTo: string;
   appointment?: Appointment;
   leadId?: string;
   contacts?: Option[];
+  /** Whether a Google calendar is connected, which decides what to offer. */
+  calendarConnected?: boolean;
 }) {
   const zone = appointment?.timezone ?? 'Europe/London';
   return (
@@ -238,6 +251,62 @@ export function AppointmentForm({
         defaultValue={appointment?.meeting_notes}
       />
       <TextField name="outcome" label="Outcome" defaultValue={appointment?.outcome} />
+
+      <Disclosure summary="Attendees and meeting link" open={hasCalendarDetail(appointment)}>
+        <div className="space-y-3 rounded-lg border border-line-soft p-3">
+          {!calendarConnected ? (
+            <p className="text-xs text-white/40">
+              No Google calendar is connected, so these are recorded in the CRM only. Connect one
+              on the calendar page to have the invitation created for you.
+            </p>
+          ) : null}
+
+          <TextAreaField
+            name="attendee_emails"
+            label="Attendees"
+            rows={2}
+            defaultValue={appointment?.attendee_emails?.join(', ')}
+            placeholder="owner@practice.co.uk, manager@practice.co.uk"
+          />
+
+          <CheckboxField
+            name="conference_requested"
+            label="Create a Google Meet link"
+            defaultChecked={appointment?.conference_requested}
+            hint={
+              appointment?.google_meet_url
+                ? 'Already created. The existing link is kept — editing never mints a second one.'
+                : 'Google creates the link when the event syncs.'
+            }
+          />
+
+          {/*
+            Off by default, and said plainly. Ticking this makes Google email
+            every attendee; leaving it alone means the event is created
+            silently and you invite people yourself.
+          */}
+          <CheckboxField
+            name="notify_attendees"
+            label="Let Google email the attendees"
+            defaultChecked={appointment?.notify_attendees}
+            hint="Off by default. The CRM never emails anyone unless you choose this."
+          />
+
+          {appointment?.google_meet_url ? (
+            <p className="break-all text-xs text-white/45">
+              Meet link:{' '}
+              <a
+                href={appointment.google_meet_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-electric-300 hover:underline"
+              >
+                {appointment.google_meet_url}
+              </a>
+            </p>
+          ) : null}
+        </div>
+      </Disclosure>
 
       <SubmitButton>{appointment ? 'Save appointment' : 'Book appointment'}</SubmitButton>
     </form>

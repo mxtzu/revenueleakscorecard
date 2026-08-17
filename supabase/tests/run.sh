@@ -54,3 +54,4 @@ done
 echo "→ running assertions"
 psql "$TARGET" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/crm_schema_test.sql"
 psql "$TARGET" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/sales_workflow_test.sql"
+psql "$TARGET" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/calendar_sync_test.sql"

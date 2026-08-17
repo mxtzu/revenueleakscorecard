@@ -90,10 +90,76 @@ function checkConfig(): void {
       'Set LEAD_SYNC_SECRET to enable the import endpoint. The CLI works without it.');
   }
 
+  checkCalendarConfig();
+
   if (process.env.GITHUB_PAGES === 'true') {
     record('Build target', 'fail', 'GITHUB_PAGES=true forces a static export',
       'The CRM is server-rendered per request and cannot be statically exported. Unset it.');
   }
+}
+
+/**
+ * Google Calendar is optional, so nothing here fails a deployment that is not
+ * using it. What does fail is a half-configuration: a client id with no token
+ * key means the Connect button sends someone all the way through Google's
+ * consent screen and then cannot store the result.
+ */
+function checkCalendarConfig(): void {
+  const hasGoogle = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  const partialGoogle =
+    !hasGoogle && Boolean(process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_SECRET);
+
+  let keyBytes = 0;
+  if (process.env.CALENDAR_TOKEN_KEY) {
+    keyBytes = Buffer.from(
+      process.env.CALENDAR_TOKEN_KEY.trim().replace(/-/g, '+').replace(/_/g, '/'),
+      'base64'
+    ).length;
+  }
+
+  if (!hasGoogle && !partialGoogle) {
+    record('Google Calendar', 'warn', 'Not configured — appointments stay in the CRM',
+      'Optional. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable it.');
+    return;
+  }
+  if (partialGoogle) {
+    record('Google Calendar', 'fail', 'Only one of GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET is set',
+      'Set both, or neither.');
+    return;
+  }
+
+  if (keyBytes === 0) {
+    record('Calendar token key', 'fail', 'CALENDAR_TOKEN_KEY is not set',
+      'OAuth tokens cannot be stored safely without it: openssl rand -base64 32');
+  } else if (keyBytes !== 32) {
+    record('Calendar token key', 'fail', `CALENDAR_TOKEN_KEY decodes to ${keyBytes} bytes, not 32`,
+      'openssl rand -base64 32');
+  } else {
+    record('Calendar token key', 'ok', 'Set, 32 bytes');
+  }
+
+  // Same trap as the service-role key: a NEXT_PUBLIC_ prefix compiles the
+  // value into the browser bundle for anyone to read.
+  const leaked = Object.keys(process.env).filter(
+    (name) =>
+      name.startsWith('NEXT_PUBLIC_') &&
+      /GOOGLE_CLIENT_SECRET|CALENDAR_TOKEN_KEY|CALENDAR_SYNC_SECRET|CALENDAR_WEBHOOK_SECRET/.test(name)
+  );
+  if (leaked.length) {
+    record('Calendar secret exposure', 'fail', `Compiled into the browser: ${leaked.join(', ')}`,
+      'Rotate them and rename without the NEXT_PUBLIC_ prefix.');
+  }
+
+  record(
+    'Calendar sync secret',
+    process.env.CALENDAR_SYNC_SECRET ? 'ok' : 'warn',
+    process.env.CALENDAR_SYNC_SECRET
+      ? 'Set — scheduled syncing is available'
+      : 'Not set — scheduled syncing is disabled',
+    process.env.CALENDAR_SYNC_SECRET
+      ? undefined
+      : 'The in-app "Sync now" button works without it.'
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -103,7 +169,8 @@ const CRM_TABLES = [
   'profiles', 'crm_leads', 'lead_intelligence', 'contacts', 'activities',
   'outreach_sequences', 'outreach_steps', 'lead_outreach', 'tasks', 'appointments',
   'opportunities', 'proposals', 'clients', 'contracts', 'payments', 'notes',
-  'documents', 'pipeline_stage_history'
+  'documents', 'pipeline_stage_history',
+  'calendar_accounts', 'calendar_credentials', 'calendar_deletions'
 ];
 
 async function checkDatabase(): Promise<void> {
@@ -149,6 +216,17 @@ async function checkDatabase(): Promise<void> {
     record('Migrations up to date', 'ok', '20260816_add_lead_contact applied');
   }
 
+  // Same reasoning for the sales workflow: the functions arrived in their own
+  // migration, and a project missing them fails on the first deal converted
+  // rather than here.
+  const { error: workflowError } = await admin.rpc('crm_stage_rank', { stage: 'qualified' });
+  if (workflowError) {
+    record('Sales workflow', 'fail', workflowError.message,
+      'Apply supabase/migrations/20260818_sales_workflow.sql');
+  } else {
+    record('Sales workflow', 'ok', 'Transition functions installed');
+  }
+
   const { count } = await admin.from('crm_leads').select('*', { count: 'exact', head: true });
   record('Leads', count ? 'ok' : 'warn', `${count ?? 0} in the CRM`,
     count ? undefined : 'Import one: npm run sync:leads -- --file <export.json>');
@@ -181,7 +259,12 @@ async function checkRls(): Promise<void> {
   });
 
   const exposed: string[] = [];
-  for (const table of ['crm_leads', 'lead_intelligence', 'clients', 'payments', 'profiles']) {
+  const guarded = [
+    'crm_leads', 'lead_intelligence', 'clients', 'payments', 'profiles',
+    // Holds live Google refresh tokens; nothing but the service role may read it.
+    'calendar_accounts', 'calendar_credentials'
+  ];
+  for (const table of guarded) {
     const { data, error } = await anon.from(table).select('*').limit(1);
     // An error here is the healthy outcome; rows are not.
     if (!error && data && data.length > 0) exposed.push(table);

@@ -95,6 +95,10 @@ Environment variables, all three at Production scope:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | browser + server | Safe to expose; RLS is what protects the data |
 | `SUPABASE_SERVICE_ROLE_KEY` | **server only** | Bypasses RLS entirely |
 | `LEAD_SYNC_SECRET` | server only | Optional; the import route 503s until it is set |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | **server only** | Optional; enables Google Calendar |
+| `CALENDAR_TOKEN_KEY` | **server only** | Required to connect a calendar; encrypts stored OAuth tokens |
+| `CALENDAR_SYNC_SECRET` | server only | Optional; enables scheduled syncing |
+| `CALENDAR_WEBHOOK_SECRET` / `CALENDAR_WEBHOOK_URL` | server only | Optional; enables Google push notifications |
 
 The service-role key must never be given a `NEXT_PUBLIC_` name — that compiles
 it into the browser bundle and hands every visitor full database access.
@@ -258,6 +262,109 @@ are costing them money — and the notes, outcome and follow-up are on the right
 in one form that saves as one transaction. Notes saved without the follow-up is
 the exact failure a follow-up exists to prevent.
 
+### Google Calendar
+
+Optional. Left unconfigured, appointments live in the CRM alone and the
+calendar page says so — an unconfigured deployment, a disconnected account, a
+revoked token and a genuinely empty week otherwise all render the same list of
+nothing.
+
+**Setting it up.** In the Google Cloud console: enable the Google Calendar API,
+create an OAuth client of type *Web application*, and register
+`https://<your-host>/api/crm/calendar/callback` as an authorised redirect URI.
+Then:
+
+```
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+CALENDAR_TOKEN_KEY=$(openssl rand -base64 32)
+```
+
+Each user connects their own Google account from `/calendar`. Connections are
+per person, not per agency: appointments belong to whoever is running the call,
+and one shared account would put every rep's day in the same diary.
+
+**Where the tokens live.** `calendar_credentials` is a separate table from
+`calendar_accounts` because RLS is row-level — there is no way to let someone
+read their own connection's email address while hiding its refresh token if the
+two share a row. That table has RLS enabled and **no policies at all**, so
+PostgREST returns nothing to anon, to authenticated, and to every CRM role
+including owner. Only the service-role client, server-side, can reach it. The
+values are also AES-256-GCM encrypted by the application before storage, so a
+database backup on its own is not a set of live Google credentials.
+
+`calendar_accounts` has SELECT and DELETE policies — see your own connection,
+disconnect it — and deliberately no INSERT or UPDATE policy. A connection can
+only be created by the OAuth callback after Google has actually authenticated
+the user, so the UI cannot assert a connection that does not exist.
+
+Rotating `CALENDAR_TOKEN_KEY` makes every stored token unreadable, and every
+calendar has to be reconnected. The error says so rather than failing obscurely.
+
+**What syncs, and which way.** A run does three things in order: drain
+deletions, push local edits, then pull remote changes — so a deleted
+appointment cannot be re-imported, and the pull sees the calendar as it now is.
+
+| Change | Result |
+| --- | --- |
+| Book or edit an appointment | Event created or updated in Google |
+| Delete an appointment | Event removed from Google |
+| Move an event in Google | Appointment updated in the CRM |
+| Delete an event in Google | Appointment marked cancelled |
+| Create an event in Google | Imported as an appointment |
+
+Whether an edit needs pushing is decided by a **database trigger**, not
+application code — in application code it would be one forgotten call away from
+a calendar that quietly stops matching. Changing the time, title, status or
+attendees marks the row `pending`; writing `meeting_notes` does not, because
+Google never saw them.
+
+Conflicts compare Google's `updated` against the CRM's `updated_at`, and ties
+go to the CRM. A local edit that has not been pushed yet always wins, because
+it is about to go out. A remote *cancellation* is the one thing applied
+regardless of timestamps: an event deleted in Google is not coming back, and
+leaving it live here sends someone to a meeting that is not happening.
+
+A deletion is queued by a trigger into `calendar_deletions` before the
+appointment row disappears, because by the time the sync runs the
+`external_event_id` it needs is gone.
+
+**Google Meet.** Tick "Create a Google Meet link" on an appointment and Google
+mints one when the event syncs. The link is only ever requested once — editing
+an appointment that already has one does not ask for another, because a second
+link would invalidate the one already in everybody's invitation.
+
+**Nothing is emailed unless you say so.** Adding an attendee to a Google event
+makes Google email them, so every write goes out with `sendUpdates=none` unless
+that appointment's "Let Google email the attendees" box is ticked. The default
+is off in the form *and* in the database column, and there is a schema
+assertion for it. This is the same rule the pipeline follows: the CRM records
+that a meeting exists; it does not contact anybody on its own.
+
+**Keeping it in sync.** The in-app "Sync now" button always works. For
+scheduled syncing, set `CALENDAR_SYNC_SECRET` and call the endpoint on a
+schedule (Vercel Cron, GitHub Actions, anything):
+
+```bash
+curl -X POST "$SITE/api/crm/calendar/sync" -H "Authorization: Bearer $CALENDAR_SYNC_SECRET"
+```
+
+It fails closed: without the secret set, that route answers 503 rather than
+running unauthenticated.
+
+Google push notifications are supported and optional. Set
+`CALENDAR_WEBHOOK_SECRET` and a publicly reachable `CALENDAR_WEBHOOK_URL` and
+the sync opens a channel, renewing it before Google expires it. Notifications
+carry no data — they only mean "list again" — and they can be dropped, so the
+poll remains the thing that guarantees convergence. The channel token is an
+HMAC of the channel id, so a stranger who finds the webhook URL cannot make the
+CRM do anything.
+
+**The 410.** Google expires incremental sync cursors and answers `410 GONE`.
+The only correct response is to discard the cursor and pull the window again;
+getting it wrong means a calendar that silently stops updating. That path is
+implemented and tested.
+
 ### Documents
 
 Files live in a **private** Supabase Storage bucket (`crm-documents`), created by
@@ -314,7 +421,7 @@ Put in triggers rather than application code, so it holds no matter which client
 | `/leads/[id]/call` | Sales call workspace — talking points, call notes, follow-up and task in one save |
 | `/pipeline` | Board, one column per active stage |
 | `/tasks` | Open tasks grouped by urgency; create, edit, complete, reopen, delete |
-| `/calendar` | Appointments by day; book, edit, change status, delete |
+| `/calendar` | Appointments by day; book, edit, change status, delete; connect and sync Google Calendar |
 | `/opportunities` | Deals with value totals; create, edit, delete, manage proposals, mark sent, win into a client, mark lost |
 | `/outreach` | Sequence and step templates. Writes templates only — nothing sends |
 | `/clients` | Accounts; create |
@@ -331,9 +438,12 @@ to the page as well as to the API.
 Present in the schema so the data model does not need re-cutting later, but with no
 implementation and no UI:
 
-cold email sending · SMS · automated calling · voicemail drops · Google Calendar OAuth ·
-Google Meet automation · Stripe payment processing · AI transcription · AI meeting
-summaries · client portal · advanced analytics · an automated outreach engine.
+cold email sending · SMS · automated calling · voicemail drops · Stripe payment
+processing · AI transcription · AI meeting summaries · client portal · advanced
+analytics · an automated outreach engine.
+
+Google Calendar and Meet were on this list until Sprint 4 and are now built;
+everything else above is still schema only.
 
 The CRM records that a call happened; it does not place one. Nothing in it sends a message
 to a lead.
@@ -371,4 +481,19 @@ conversion leaves nothing behind, that a viewer is refused with
 `insufficient_privilege`, that `anon` holds no EXECUTE, and that none of the functions
 is SECURITY DEFINER.
 
-Run both after any migration change.
+`supabase/tests/calendar_sync_test.sql` covers the calendar schema. The
+assertions that matter most are about what is *absent*: `calendar_credentials`
+and `calendar_deletions` have no policies, and a policy added later by accident
+would open them silently. It also checks that the token owner and an admin both
+read nothing from the credentials table, that the UI cannot fabricate a
+connection, that the dirty-marking trigger fires on the right columns only, and
+that a deleted appointment queues its Google event for removal.
+
+The Google integration itself is covered by unit tests against a fake
+transport (`src/lib/calendar/__tests__/`): the OAuth exchange, token refresh
+and revocation, the `sendUpdates=none` default, `conferenceDataVersion`,
+conflict resolution, cancellation handling and the 410 full-resync path. There
+is no live Google account in CI, so the request the code builds is what gets
+asserted.
+
+Run all three after any migration change.

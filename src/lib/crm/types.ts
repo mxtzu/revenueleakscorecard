@@ -329,6 +329,23 @@ export interface Appointment {
   outcome: string | null;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
+
+  // Google Calendar sync (20260819_calendar_sync.sql).
+  calendar_account_id: Uuid | null;
+  sync_state: 'local' | 'pending' | 'synced' | 'failed';
+  sync_error: string | null;
+  synced_at: IsoTimestamp | null;
+  /** Google's own last-modified stamp, for deciding which side changed last. */
+  external_updated_at: IsoTimestamp | null;
+  external_html_link: string | null;
+  /** A Meet link was asked for; `google_meet_url` is what came back. */
+  conference_requested: boolean;
+  attendee_emails: string[];
+  /**
+   * Off by default. Google emails attendees on write unless `sendUpdates=none`,
+   * and this CRM never contacts anybody without a person choosing to.
+   */
+  notify_attendees: boolean;
 }
 
 export interface Opportunity {

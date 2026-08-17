@@ -1,15 +1,23 @@
 /**
  * Calendar — upcoming appointments, grouped by day.
  *
- * Manual entries only. Google Calendar OAuth and Meet link generation are
- * explicitly out of scope for this build, so the page says so rather than
- * showing an empty grid that looks broken.
+ * Appointments can live in the CRM alone or be mirrored into a connected
+ * Google calendar. The connection panel at the top is deliberate: an
+ * unconfigured deployment, a disconnected account, a broken token and a genuinely
+ * empty week all render the same list of nothing, and only the panel tells them
+ * apart.
  */
 
 import Link from 'next/link';
 
 import { AppointmentForm } from '@/components/crm/entityForms';
-import { ActionError, DeleteForm, Disclosure, ReadOnlyNotice } from '@/components/crm/forms';
+import {
+  ActionError,
+  ActionNotice,
+  DeleteForm,
+  Disclosure,
+  ReadOnlyNotice
+} from '@/components/crm/forms';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/crm/ui';
 import { formatTime, humanise, orDash } from '@/lib/crm/format';
 import { canWrite, isAdmin } from '@/lib/crm/permissions';
@@ -17,7 +25,13 @@ import { listUpcomingAppointments } from '@/lib/crm/queries';
 import { crmSession } from '@/lib/crm/server';
 import { APPOINTMENT_STATUSES, type Appointment, type AppointmentStatus } from '@/lib/crm/types';
 
+import { CalendarConnectionPanel, SyncBadge } from '@/components/crm/calendarPanel';
+import { isTokenKeyConfigured } from '@/lib/calendar/crypto';
+import { isGoogleConfigured } from '@/lib/calendar/oauth';
+import { getCalendarAccount } from '@/lib/calendar/queries';
+
 import { markAppointment, removeAppointment, saveAppointment } from '../_actions/crud';
+import { disconnectCalendar, syncCalendar } from '../_actions/calendar';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,12 +61,16 @@ function dayLabel(iso: string): string {
 export default async function CalendarPage({
   searchParams
 }: {
-  searchParams?: { error?: string };
+  searchParams?: { error?: string; notice?: string; connected?: string };
 }) {
   const { client, profile } = await crmSession();
-  const appointments = await listUpcomingAppointments(client, 100);
+  const [appointments, account] = await Promise.all([
+    listUpcomingAppointments(client, 100),
+    profile ? getCalendarAccount(client, profile.id) : Promise.resolve(null)
+  ]);
   const writable = canWrite(profile);
   const deletable = isAdmin(profile);
+  const connected = Boolean(account?.is_active);
 
   const byDay = new Map<string, Appointment[]>();
   for (const appointment of appointments) {
@@ -72,11 +90,31 @@ export default async function CalendarPage({
       />
 
       <ActionError message={searchParams?.error} />
+      <ActionNotice
+        message={
+          searchParams?.connected
+            ? `Connected to ${searchParams.connected}. Press "Sync now" to bring your diary in.`
+            : searchParams?.notice
+        }
+      />
+
+      <CalendarConnectionPanel
+        account={account}
+        googleConfigured={isGoogleConfigured()}
+        tokenKeyConfigured={isTokenKeyConfigured()}
+        writable={writable}
+        syncAction={syncCalendar}
+        disconnectAction={disconnectCalendar}
+      />
 
       <Card className="mb-4">
         {writable ? (
           <Disclosure summary="Book an appointment" tone="primary">
-            <AppointmentForm action={saveAppointment} returnTo="/calendar" />
+            <AppointmentForm
+              action={saveAppointment}
+              returnTo="/calendar"
+              calendarConnected={connected}
+            />
           </Disclosure>
         ) : (
           <ReadOnlyNotice what="book appointments" />
@@ -86,7 +124,11 @@ export default async function CalendarPage({
       {days.length === 0 ? (
         <EmptyState
           title="Nothing scheduled"
-          description="Appointments are entered against a lead. Google Calendar and Meet integration are not part of this build."
+          description={
+            connected
+              ? "Nothing coming up, here or in your Google calendar."
+              : "Appointments are entered against a lead, or booked from a sales call."
+          }
         />
       ) : (
         <div className="space-y-4">
@@ -112,6 +154,27 @@ export default async function CalendarPage({
                       )}
                     </span>
                     <span className="text-xs text-white/30">{orDash(appointment.timezone)}</span>
+                    {appointment.google_meet_url ? (
+                      <a
+                        href={appointment.google_meet_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-lg border border-electric-500/40 px-2 py-0.5 text-[11px] text-electric-300 hover:bg-electric-500/10"
+                      >
+                        Join Meet
+                      </a>
+                    ) : null}
+                    {appointment.external_html_link ? (
+                      <a
+                        href={appointment.external_html_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] text-white/35 hover:text-white/70"
+                      >
+                        In Google
+                      </a>
+                    ) : null}
+                    <SyncBadge state={appointment.sync_state} error={appointment.sync_error} />
                     <Badge tone={STATUS_TONE[appointment.status]}>
                       {humanise(appointment.status)}
                     </Badge>
@@ -137,6 +200,7 @@ export default async function CalendarPage({
                         </div>
                         <Disclosure summary="Edit">
                           <AppointmentForm
+                            calendarConnected={connected}
                             action={saveAppointment}
                             returnTo="/calendar"
                             appointment={appointment}

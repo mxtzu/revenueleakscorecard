@@ -251,3 +251,34 @@ export function optionalUrl(form: FormData, field: string, label: string): strin
   }
   return parsed.toString();
 }
+
+/**
+ * Attendee email addresses, comma or newline separated.
+ *
+ * Validated strictly, and this is the one field where that really matters:
+ * a mistyped address on an appointment with notifications on is a meeting
+ * invitation delivered to a stranger. Anything that is not plausibly an
+ * address is refused by name rather than quietly dropped, because a silently
+ * discarded attendee is someone who never gets invited and nobody notices
+ * until the call.
+ *
+ * Duplicates are collapsed and case is normalised, so the same person added
+ * twice is one attendee.
+ */
+export function emailList(form: FormData, field: string): string[] {
+  const raw = optionalText(form, field);
+  if (raw === null) return [];
+
+  const seen = new Set<string>();
+  for (const entry of raw.split(/[,;\n]/)) {
+    const address = entry.trim().toLowerCase();
+    if (!address) continue;
+    // Deliberately not RFC 5322: that grammar accepts things no mail server
+    // wants. This is the shape of an address someone types into a form.
+    if (!/^[^\s@,]+@[^\s@,.]+(\.[^\s@,.]+)+$/.test(address)) {
+      throw new ValidationError(`"${entry.trim()}" is not a valid email address.`);
+    }
+    seen.add(address);
+  }
+  return Array.from(seen);
+}

@@ -311,3 +311,22 @@ export function optionsFrom(
     label: labels?.[value] ?? value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, ' ')
   }));
 }
+
+/**
+ * The counterpart to ActionError, for something that went right.
+ *
+ * Green rather than red, because "Synced — 3 sent, 1 received" and "the
+ * database refused that write" arriving in the same grey box is how people
+ * stop reading either.
+ */
+export function ActionNotice({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <div
+      role="status"
+      className="mb-4 rounded-lg border border-emerald-400/25 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-200"
+    >
+      {message}
+    </div>
+  );
+}
