@@ -8,11 +8,16 @@
 
 import Link from 'next/link';
 
+import { AppointmentForm } from '@/components/crm/entityForms';
+import { ActionError, DeleteForm, Disclosure, ReadOnlyNotice } from '@/components/crm/forms';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/crm/ui';
 import { formatTime, humanise, orDash } from '@/lib/crm/format';
+import { canWrite, isAdmin } from '@/lib/crm/permissions';
 import { listUpcomingAppointments } from '@/lib/crm/queries';
-import { crmClient } from '@/lib/crm/server';
-import type { Appointment, AppointmentStatus } from '@/lib/crm/types';
+import { crmSession } from '@/lib/crm/server';
+import { APPOINTMENT_STATUSES, type Appointment, type AppointmentStatus } from '@/lib/crm/types';
+
+import { markAppointment, removeAppointment, saveAppointment } from '../_actions/crud';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,8 +44,15 @@ function dayLabel(iso: string): string {
   }).format(date);
 }
 
-export default async function CalendarPage() {
-  const appointments = await listUpcomingAppointments(crmClient(), 100);
+export default async function CalendarPage({
+  searchParams
+}: {
+  searchParams?: { error?: string };
+}) {
+  const { client, profile } = await crmSession();
+  const appointments = await listUpcomingAppointments(client, 100);
+  const writable = canWrite(profile);
+  const deletable = isAdmin(profile);
 
   const byDay = new Map<string, Appointment[]>();
   for (const appointment of appointments) {
@@ -58,6 +70,18 @@ export default async function CalendarPage() {
         title="Calendar"
         description="Upcoming appointments recorded in the CRM."
       />
+
+      <ActionError message={searchParams?.error} />
+
+      <Card className="mb-4">
+        {writable ? (
+          <Disclosure summary="Book an appointment" tone="primary">
+            <AppointmentForm action={saveAppointment} returnTo="/calendar" />
+          </Disclosure>
+        ) : (
+          <ReadOnlyNotice what="book appointments" />
+        )}
+      </Card>
 
       {days.length === 0 ? (
         <EmptyState
@@ -91,6 +115,43 @@ export default async function CalendarPage() {
                     <Badge tone={STATUS_TONE[appointment.status]}>
                       {humanise(appointment.status)}
                     </Badge>
+
+                    {writable ? (
+                      <div className="w-full space-y-2 border-t border-line-soft pt-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          {APPOINTMENT_STATUSES.filter(
+                            (status) => status !== appointment.status
+                          ).map((status) => (
+                            <form action={markAppointment} key={status}>
+                              <input type="hidden" name="id" value={appointment.id} />
+                              <input type="hidden" name="status" value={status} />
+                              <input type="hidden" name="return_to" value="/calendar" />
+                              <button
+                                type="submit"
+                                className="rounded-lg border border-line px-2 py-0.5 text-[11px] text-white/55 hover:border-electric-500/50 hover:text-white/85"
+                              >
+                                {humanise(status)}
+                              </button>
+                            </form>
+                          ))}
+                        </div>
+                        <Disclosure summary="Edit">
+                          <AppointmentForm
+                            action={saveAppointment}
+                            returnTo="/calendar"
+                            appointment={appointment}
+                          />
+                        </Disclosure>
+                        <DeleteForm
+                          action={removeAppointment}
+                          id={appointment.id}
+                          hidden={{ return_to: '/calendar' }}
+                          label="Delete"
+                          warning="Prefer cancelled or no-show above — a meeting that did not happen is a fact worth keeping."
+                          allowed={deletable}
+                        />
+                      </div>
+                    ) : null}
                   </li>
                 ))}
               </ul>

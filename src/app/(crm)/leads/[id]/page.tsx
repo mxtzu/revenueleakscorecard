@@ -40,8 +40,29 @@ import {
   humanise,
   orDash
 } from '@/lib/crm/format';
-import { canWrite } from '@/lib/crm/permissions';
-import { getLeadDetail } from '@/lib/crm/queries';
+import {
+  AppointmentForm,
+  ContactForm,
+  NoteForm,
+  OpportunityForm,
+  TaskForm
+} from '@/components/crm/entityForms';
+import { ActionError, DeleteForm, Disclosure, ReadOnlyNotice } from '@/components/crm/forms';
+import {
+  removeAppointment,
+  removeContact,
+  removeNote,
+  removeOpportunity,
+  removeTask,
+  saveAppointment,
+  saveContact,
+  saveNote,
+  saveOpportunity,
+  saveTask
+} from '../../_actions/crud';
+import { noteText } from '@/lib/crm/mutations';
+import { canWrite, isAdmin } from '@/lib/crm/permissions';
+import { getLeadDetail, listAssignableProfiles } from '@/lib/crm/queries';
 import { crmSession } from '@/lib/crm/server';
 import { PIPELINE_STAGES, PIPELINE_STAGE_LABELS } from '@/lib/crm/types';
 
@@ -60,12 +81,27 @@ export default async function LeadDetailPage({
   searchParams?: { error?: string };
 }) {
   const { client, profile } = await crmSession();
-  const lead = await getLeadDetail(client, params.id);
+  const [lead, team] = await Promise.all([
+    getLeadDetail(client, params.id),
+    listAssignableProfiles(client)
+  ]);
   if (!lead) notFound();
 
+  const here = `/leads/${params.id}`;
+  const people = team.map((member) => ({
+    value: member.id,
+    label: member.full_name ?? member.email ?? 'Unnamed'
+  }));
+  const contactOptions = lead.contacts.map((contact) => ({
+    value: contact.id,
+    label: contact.full_name ?? 'Unnamed'
+  }));
+
   // Hiding forms a role cannot submit is presentation only; the server action
-  // re-checks and RLS refuses regardless.
+  // re-checks and RLS refuses regardless. Deletion is admin-only in RLS, so it
+  // gets the narrower gate.
   const writable = canWrite(profile);
+  const deletable = isAdmin(profile);
 
   const info = lead.intelligence;
   const name = info?.company_name ?? lead.external_lead_id;
@@ -95,14 +131,7 @@ export default async function LeadDetailPage({
         }
       />
 
-      {searchParams?.error ? (
-        <div
-          role="alert"
-          className="mb-4 rounded-lg border border-rose-400/25 bg-rose-400/5 px-4 py-3 text-sm text-rose-200"
-        >
-          {searchParams.error}
-        </div>
-      ) : null}
+      <ActionError message={searchParams?.error} />
 
       {!writable ? (
         <p className="mb-4 rounded-lg border border-line bg-white/[0.02] px-4 py-2.5 text-xs text-white/45">
@@ -325,20 +354,21 @@ export default async function LeadDetailPage({
           {info?.contact_name ? (
             <p className="mb-3 rounded-lg border border-line-soft bg-white/[0.02] px-3 py-2 text-xs text-white/55">
               Research found <span className="text-white/85">{info.contact_name}</span>
-              {info.contact_role ? ` (${info.contact_role})` : ''} on the company website. This is a
-              synced finding, not a CRM contact — adding contacts is not built yet.
+              {info.contact_role ? ` (${info.contact_role})` : ''} on the company website. That is a
+              synced finding, not a CRM contact — add them below to make it one.
             </p>
           ) : null}
+
           {lead.contacts.length === 0 ? (
             <EmptyState
-              title="No named contacts"
+              title="No contacts yet"
               description="The pipeline records a decision-maker only where the business publishes one with a stated role; it never guesses a person's name."
             />
           ) : (
             <ul className="space-y-3">
               {lead.contacts.map((contact) => (
                 <li key={contact.id} className="rounded-lg border border-line-soft px-3 py-2.5">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium text-white">
                       {contact.full_name ??
                         [contact.first_name, contact.last_name].filter(Boolean).join(' ') ??
@@ -351,14 +381,45 @@ export default async function LeadDetailPage({
                   <p className="mt-1.5 text-xs text-white/60">
                     {orDash(contact.email)} · {orDash(contact.phone)}
                   </p>
+
+                  {writable ? (
+                    <div className="mt-2.5 space-y-2 border-t border-line-soft pt-2.5">
+                      <Disclosure summary="Edit">
+                        <ContactForm
+                          action={saveContact}
+                          leadId={lead.id}
+                          returnTo={here}
+                          contact={contact}
+                        />
+                      </Disclosure>
+                      <DeleteForm
+                        action={removeContact}
+                        id={contact.id}
+                        hidden={{ crm_lead_id: lead.id, return_to: here }}
+                        label="Delete contact"
+                        warning={`${contact.full_name ?? 'This contact'} will be removed permanently. Activities that referenced them are kept.`}
+                        allowed={deletable}
+                      />
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>
           )}
+
+          <div className="mt-4 border-t border-line-soft pt-4">
+            {writable ? (
+              <Disclosure summary="Add a contact" tone="primary">
+                <ContactForm action={saveContact} leadId={lead.id} returnTo={here} />
+              </Disclosure>
+            ) : (
+              <ReadOnlyNotice what="add contacts" />
+            )}
+          </div>
         </Card>
 
         {/* ---------------------------------------------------------------- */}
-        {/* Opportunities, tasks and appointments for this lead               */}
+        {/* Opportunities, tasks, appointments and notes for this lead        */}
         {/* ---------------------------------------------------------------- */}
         <Card title="Opportunities">
           {lead.opportunities.length === 0 ? (
@@ -366,48 +427,220 @@ export default async function LeadDetailPage({
           ) : (
             <ul className="space-y-2">
               {lead.opportunities.map((opportunity) => (
-                <li
-                  key={opportunity.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-line-soft px-3 py-2.5"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-white">{opportunity.name}</p>
-                    <p className="text-xs text-white/40">
-                      {humanise(opportunity.stage)} · {formatMoney(opportunity.monthly_value)}/mo
-                    </p>
+                <li key={opportunity.id} className="rounded-lg border border-line-soft px-3 py-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-white">{opportunity.name}</p>
+                      <p className="text-xs text-white/40">
+                        {humanise(opportunity.stage)} · {formatMoney(opportunity.monthly_value)}/mo
+                        {opportunity.contract_months ? ` × ${opportunity.contract_months}mo` : ''}
+                      </p>
+                    </div>
+                    <Badge tone={opportunity.stage === 'won' ? 'positive' : 'neutral'}>
+                      {opportunity.probability === null ? '—' : `${opportunity.probability}%`}
+                    </Badge>
                   </div>
-                  <Badge tone={opportunity.stage === 'won' ? 'positive' : 'neutral'}>
-                    {opportunity.probability === null ? '—' : `${opportunity.probability}%`}
-                  </Badge>
+                  {writable ? (
+                    <div className="mt-2.5 space-y-2 border-t border-line-soft pt-2.5">
+                      <Disclosure summary="Edit">
+                        <OpportunityForm
+                          action={saveOpportunity}
+                          returnTo={here}
+                          opportunity={opportunity}
+                          leadId={lead.id}
+                          people={people}
+                          contacts={contactOptions}
+                        />
+                      </Disclosure>
+                      <DeleteForm
+                        action={removeOpportunity}
+                        id={opportunity.id}
+                        hidden={{ return_to: here }}
+                        label="Delete opportunity"
+                        warning="Deleting an opportunity also deletes its proposals. A lost deal is better recorded as lost than removed."
+                        allowed={deletable}
+                      />
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>
           )}
+
+          <div className="mt-4 border-t border-line-soft pt-4">
+            {writable ? (
+              <Disclosure summary="Add an opportunity" tone="primary">
+                <OpportunityForm
+                  action={saveOpportunity}
+                  returnTo={here}
+                  leadId={lead.id}
+                  people={people}
+                  contacts={contactOptions}
+                />
+              </Disclosure>
+            ) : (
+              <ReadOnlyNotice what="create opportunities" />
+            )}
+          </div>
         </Card>
 
-        <Card title="Tasks &amp; appointments">
-          {lead.tasks.length === 0 && lead.appointments.length === 0 ? (
-            <EmptyState title="Nothing scheduled" />
+        <Card title="Tasks">
+          {lead.tasks.length === 0 ? (
+            <EmptyState title="No tasks" />
           ) : (
             <ul className="space-y-2">
               {lead.tasks.map((task) => (
-                <li key={task.id} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="truncate text-white/80">{task.title}</span>
-                  <span className="whitespace-nowrap text-xs text-white/40">
-                    {formatRelative(task.due_at)}
-                  </span>
-                </li>
-              ))}
-              {lead.appointments.map((appointment) => (
-                <li key={appointment.id} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="truncate text-white/80">📅 {appointment.title}</span>
-                  <span className="whitespace-nowrap text-xs text-white/40">
-                    {formatDateTime(appointment.starts_at)}
-                  </span>
+                <li key={task.id} className="rounded-lg border border-line-soft px-3 py-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="min-w-0 flex-1 text-sm text-white/85">{task.title}</span>
+                    <span className="whitespace-nowrap text-xs text-white/40">
+                      {formatRelative(task.due_at)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-white/35">
+                    {humanise(task.status)} · {task.priority}
+                  </p>
+                  {writable ? (
+                    <div className="mt-2.5 space-y-2 border-t border-line-soft pt-2.5">
+                      <Disclosure summary="Edit">
+                        <TaskForm
+                          action={saveTask}
+                          returnTo={here}
+                          task={task}
+                          leadId={lead.id}
+                          people={people}
+                        />
+                      </Disclosure>
+                      <DeleteForm
+                        action={removeTask}
+                        id={task.id}
+                        hidden={{ return_to: here }}
+                        label="Delete task"
+                        warning="This task will be removed permanently."
+                        allowed={deletable}
+                      />
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>
           )}
+
+          <div className="mt-4 border-t border-line-soft pt-4">
+            {writable ? (
+              <Disclosure summary="Add a task" tone="primary">
+                <TaskForm action={saveTask} returnTo={here} leadId={lead.id} people={people} />
+              </Disclosure>
+            ) : (
+              <ReadOnlyNotice what="create tasks" />
+            )}
+          </div>
+        </Card>
+
+        <Card title="Appointments">
+          {lead.appointments.length === 0 ? (
+            <EmptyState title="Nothing booked" />
+          ) : (
+            <ul className="space-y-2">
+              {lead.appointments.map((appointment) => (
+                <li key={appointment.id} className="rounded-lg border border-line-soft px-3 py-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="min-w-0 flex-1 text-sm text-white/85">{appointment.title}</span>
+                    <Badge tone={appointment.status === 'confirmed' ? 'positive' : 'neutral'}>
+                      {humanise(appointment.status)}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-white/40">
+                    {formatDateTime(appointment.starts_at)} · {appointment.timezone}
+                  </p>
+                  {writable ? (
+                    <div className="mt-2.5 space-y-2 border-t border-line-soft pt-2.5">
+                      <Disclosure summary="Edit">
+                        <AppointmentForm
+                          action={saveAppointment}
+                          returnTo={here}
+                          appointment={appointment}
+                          leadId={lead.id}
+                          contacts={contactOptions}
+                        />
+                      </Disclosure>
+                      <DeleteForm
+                        action={removeAppointment}
+                        id={appointment.id}
+                        hidden={{ return_to: here }}
+                        label="Delete appointment"
+                        warning="Prefer setting the status to cancelled or no-show — a meeting that did not happen is a fact worth keeping."
+                        allowed={deletable}
+                      />
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="mt-4 border-t border-line-soft pt-4">
+            {writable ? (
+              <Disclosure summary="Book an appointment" tone="primary">
+                <AppointmentForm
+                  action={saveAppointment}
+                  returnTo={here}
+                  leadId={lead.id}
+                  contacts={contactOptions}
+                />
+              </Disclosure>
+            ) : (
+              <ReadOnlyNotice what="book appointments" />
+            )}
+          </div>
+        </Card>
+
+        <Card title="Notes" description="Longer-form context that is not an activity.">
+          {lead.notes.length === 0 ? (
+            <EmptyState title="No notes" />
+          ) : (
+            <ul className="space-y-2">
+              {lead.notes.map((note) => (
+                <li key={note.id} className="rounded-lg border border-line-soft px-3 py-2.5">
+                  {note.title ? (
+                    <p className="text-sm font-medium text-white/85">{note.title}</p>
+                  ) : null}
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-white/65">{noteText(note)}</p>
+                  <p className="mt-1.5 text-xs text-white/30">{formatDateTime(note.created_at)}</p>
+                  {writable ? (
+                    <div className="mt-2.5 space-y-2 border-t border-line-soft pt-2.5">
+                      <Disclosure summary="Edit">
+                        <NoteForm
+                          action={saveNote}
+                          returnTo={here}
+                          note={note}
+                          leadId={lead.id}
+                        />
+                      </Disclosure>
+                      <DeleteForm
+                        action={removeNote}
+                        id={note.id}
+                        hidden={{ crm_lead_id: lead.id, return_to: here }}
+                        label="Delete note"
+                        warning="This note will be removed permanently."
+                        allowed={deletable}
+                      />
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="mt-4 border-t border-line-soft pt-4">
+            {writable ? (
+              <Disclosure summary="Add a note" tone="primary">
+                <NoteForm action={saveNote} returnTo={here} leadId={lead.id} />
+              </Disclosure>
+            ) : (
+              <ReadOnlyNotice what="add notes" />
+            )}
+          </div>
         </Card>
 
         {/* ---------------------------------------------------------------- */}

@@ -18,6 +18,7 @@ import type {
   LeadDetail,
   LeadIntelligence,
   Opportunity,
+  Note,
   Payment,
   PipelineStage,
   PipelineStageHistoryEntry,
@@ -163,17 +164,18 @@ export async function getLeadDetail(
   const lead = await getLeadById(client, id);
   if (!lead) return null;
 
-  const [contacts, activities, tasks, appointments, opportunities, stageHistory] =
+  const [contacts, activities, tasks, appointments, opportunities, stageHistory, notes] =
     await Promise.all([
       listContacts(client, id),
       listActivities(client, id),
       listTasksForLead(client, id),
       listAppointmentsForLead(client, id),
       listOpportunitiesForLead(client, id),
-      listStageHistory(client, id)
+      listStageHistory(client, id),
+      listNotesForLead(client, id)
     ]);
 
-  return { ...lead, contacts, activities, tasks, appointments, opportunities, stageHistory };
+  return { ...lead, contacts, activities, tasks, appointments, opportunities, stageHistory, notes };
 }
 
 /** Counts per stage, for the pipeline board. */
@@ -421,8 +423,45 @@ export async function listActivitiesForClient(
 }
 
 // ---------------------------------------------------------------------------
+// Notes
+// ---------------------------------------------------------------------------
+export async function listNotesForLead(
+  client: CrmSupabaseClient,
+  leadId: string
+): Promise<Note[]> {
+  const result = await client
+    .from('notes')
+    .select('*')
+    .eq('crm_lead_id', leadId)
+    .order('created_at', { ascending: false });
+  return unwrap<Note[]>(result, 'listNotesForLead');
+}
+
+export async function listNotesForClient(
+  client: CrmSupabaseClient,
+  clientId: string
+): Promise<Note[]> {
+  const result = await client
+    .from('notes')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false });
+  return unwrap<Note[]>(result, 'listNotesForClient');
+}
+
+// ---------------------------------------------------------------------------
 // Profiles
 // ---------------------------------------------------------------------------
+/** Active team members, for owner and assignee pickers. */
+export async function listAssignableProfiles(client: CrmSupabaseClient): Promise<Profile[]> {
+  const result = await client
+    .from('profiles')
+    .select('*')
+    .eq('is_active', true)
+    .order('full_name', { ascending: true, nullsFirst: false });
+  return unwrap<Profile[]>(result, 'listAssignableProfiles');
+}
+
 export async function getCurrentProfile(client: CrmSupabaseClient): Promise<Profile | null> {
   const { data: auth } = await client.auth.getUser();
   if (!auth?.user) return null;

@@ -473,6 +473,7 @@ export interface LeadDetail extends CrmLeadWithIntelligence {
   appointments: Appointment[];
   opportunities: Opportunity[];
   stageHistory: PipelineStageHistoryEntry[];
+  notes: Note[];
 }
 
 export function isPipelineStage(value: unknown): value is PipelineStage {

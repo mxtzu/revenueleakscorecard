@@ -63,6 +63,10 @@ export class RecordingClient {
           record.filters.push({ op: 'eq', column, value });
           return builder;
         },
+        neq(column: string, value: unknown) {
+          record.filters.push({ op: 'neq', column, value });
+          return builder;
+        },
         gte(column: string, value: unknown) {
           record.filters.push({ op: 'gte', column, value });
           return builder;

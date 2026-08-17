@@ -14,6 +14,7 @@ import 'server-only';
 import { cookies } from 'next/headers';
 
 import { createServerClient, isCrmConfigured, type CrmSupabaseClient } from './supabase';
+import { assertCanWrite, isAdmin, PermissionError } from './permissions';
 import { getCurrentProfile } from './queries';
 import type { Profile } from './types';
 
@@ -40,3 +41,41 @@ export async function crmSession(): Promise<CrmSession> {
 }
 
 export { isCrmConfigured };
+
+/**
+ * A client for a caller whose role permits writing, plus their id.
+ *
+ * Every mutating server action starts here. The check is a courtesy — RLS
+ * refuses the write regardless — but it turns a Postgres policy violation into
+ * a sentence, and it re-reads the role at write time rather than trusting what
+ * the page decided to render some minutes ago.
+ */
+export async function requireWriter(): Promise<{
+  client: CrmSupabaseClient;
+  profile: Profile | null;
+  userId: string | null;
+}> {
+  const client = crmClient();
+  const profile = await getCurrentProfile(client);
+  assertCanWrite(profile);
+  return { client, profile, userId: profile?.id ?? null };
+}
+
+/**
+ * The same, for deletes.
+ *
+ * Deletion is admin-only in RLS (`crm_is_admin()`), unlike insert and update.
+ * A destroyed record has no undo, so the narrower gate is deliberate and this
+ * mirrors it rather than letting a writer discover the limit by hitting it.
+ */
+export async function requireAdmin(): Promise<{
+  client: CrmSupabaseClient;
+  userId: string | null;
+}> {
+  const client = crmClient();
+  const profile = await getCurrentProfile(client);
+  if (!isAdmin(profile)) {
+    throw new PermissionError('Only an owner or admin can delete records.');
+  }
+  return { client, userId: profile?.id ?? null };
+}

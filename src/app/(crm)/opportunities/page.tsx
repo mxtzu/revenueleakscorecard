@@ -18,10 +18,15 @@ import {
   StatCard,
   Table
 } from '@/components/crm/ui';
+import { ClientForm, OpportunityForm } from '@/components/crm/entityForms';
+import { ActionError, DeleteForm, Disclosure, ReadOnlyNotice } from '@/components/crm/forms';
 import { formatDate, formatMoney, humanise, orDash } from '@/lib/crm/format';
-import { listOpportunities } from '@/lib/crm/queries';
-import { crmClient } from '@/lib/crm/server';
+import { canWrite, isAdmin } from '@/lib/crm/permissions';
+import { listAssignableProfiles, listLeads, listOpportunities } from '@/lib/crm/queries';
+import { crmSession } from '@/lib/crm/server';
 import type { Opportunity, OpportunityStage } from '@/lib/crm/types';
+
+import { removeOpportunity, saveClient, saveOpportunity } from '../_actions/crud';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,8 +45,29 @@ function contractValue(opportunity: Opportunity): number {
   return recurring + Number(opportunity.setup_fee ?? 0) + Number(opportunity.one_time_value ?? 0);
 }
 
-export default async function OpportunitiesPage() {
-  const opportunities = await listOpportunities(crmClient(), 300);
+export default async function OpportunitiesPage({
+  searchParams
+}: {
+  searchParams?: { error?: string };
+}) {
+  const { client, profile } = await crmSession();
+  const [opportunities, team, leads] = await Promise.all([
+    listOpportunities(client, 300),
+    listAssignableProfiles(client),
+    listLeads(client, { limit: 300 })
+  ]);
+
+  const writable = canWrite(profile);
+  const deletable = isAdmin(profile);
+  const people = team.map((member) => ({
+    value: member.id,
+    label: member.full_name ?? member.email ?? 'Unnamed'
+  }));
+  const leadOptions = leads.map((lead) => ({
+    value: lead.id,
+    label: lead.intelligence?.company_name ?? lead.external_lead_id
+  }));
+  const leadName = new Map(leadOptions.map((option) => [option.value, option.label]));
 
   const open = opportunities.filter((item) => item.stage !== 'won' && item.stage !== 'lost');
   const won = opportunities.filter((item) => item.stage === 'won');
@@ -62,6 +88,8 @@ export default async function OpportunitiesPage() {
         description="Deals attached to leads, valued over the contract term."
       />
 
+      <ActionError message={searchParams?.error} />
+
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Open value" value={formatMoney(openValue)} hint={`${open.length} open`} />
         <StatCard
@@ -73,6 +101,21 @@ export default async function OpportunitiesPage() {
         <StatCard label="Won MRR" value={formatMoney(monthlyRecurring)} hint="Monthly, from won deals" />
       </div>
 
+      <Card className="mb-4">
+        {writable ? (
+          <Disclosure summary="Create an opportunity" tone="primary">
+            <OpportunityForm
+              action={saveOpportunity}
+              returnTo="/opportunities"
+              leads={leadOptions}
+              people={people}
+            />
+          </Disclosure>
+        ) : (
+          <ReadOnlyNotice what="create opportunities" />
+        )}
+      </Card>
+
       <Card title={`${opportunities.length} opportunit${opportunities.length === 1 ? 'y' : 'ies'}`}>
         {opportunities.length === 0 ? (
           <EmptyState
@@ -81,7 +124,10 @@ export default async function OpportunitiesPage() {
           />
         ) : (
           <Table
-            head={['Opportunity', 'Stage', 'Service', 'Monthly', 'Contract value', 'Prob.', 'Close date']}
+            head={[
+              'Opportunity', 'Stage', 'Service', 'Monthly', 'Contract value', 'Prob.',
+              'Close date', ''
+            ]}
           >
             {opportunities.map((opportunity) => (
               <Row key={opportunity.id}>
@@ -108,6 +154,46 @@ export default async function OpportunitiesPage() {
                 </Cell>
                 <Cell className="whitespace-nowrap text-white/45">
                   {formatDate(opportunity.expected_close_date)}
+                </Cell>
+                <Cell>
+                  {writable ? (
+                    <div className="flex min-w-[120px] flex-col items-start gap-1.5">
+                      <Disclosure summary="Edit">
+                        <div className="min-w-[320px] py-2">
+                          <OpportunityForm
+                            action={saveOpportunity}
+                            returnTo="/opportunities"
+                            opportunity={opportunity}
+                            people={people}
+                          />
+                        </div>
+                      </Disclosure>
+                      {opportunity.stage === 'won' ? (
+                        <Disclosure summary="Convert to client" tone="primary">
+                          <div className="min-w-[320px] py-2">
+                            <ClientForm
+                              action={saveClient}
+                              returnTo="/clients"
+                              people={people}
+                              defaults={{
+                                company_name: leadName.get(opportunity.crm_lead_id) ?? opportunity.name,
+                                crm_lead_id: opportunity.crm_lead_id,
+                                opportunity_id: opportunity.id
+                              }}
+                            />
+                          </div>
+                        </Disclosure>
+                      ) : null}
+                      <DeleteForm
+                        action={removeOpportunity}
+                        id={opportunity.id}
+                        hidden={{ return_to: '/opportunities' }}
+                        label="Delete"
+                        warning="Deleting an opportunity also deletes its proposals. A lost deal is better recorded as lost."
+                        allowed={deletable}
+                      />
+                    </div>
+                  ) : null}
                 </Cell>
               </Row>
             ))}

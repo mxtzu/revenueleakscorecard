@@ -175,6 +175,24 @@ Enforced by four SECURITY DEFINER helpers used in every policy: `crm_role_of()`,
 `crm_is_member()`, `crm_is_admin()`, `crm_can_write()`. A deactivated profile
 (`is_active = false`) is not a member, so revoking access is one column update.
 
+### What the UI can write
+
+Full create/edit/delete: **contacts, tasks, appointments, opportunities, clients, notes**.
+Create and edit are open to any writing role; **delete is admin-only**, matching
+`crm_is_admin()` in RLS — so the delete control renders for owners and admins
+only, rather than offering a button the database refuses.
+
+Two derived fields are never entered by hand, because a second field that can
+disagree with the first is a reporting bug waiting to happen:
+
+- `tasks.completed_at` follows `status`
+- `opportunities.won_at` / `lost_at` follow `stage` (and an existing date is kept
+  when a closed deal is edited, so "won last March" does not drift to today)
+
+Wall-clock times entered in a form are interpreted in `Europe/London` unless the
+record carries its own zone, as appointments do. The offset is looked up rather
+than assumed: 14:00 in London is 14:00Z in January and 13:00Z in June.
+
 Three tables have **no write policy at all**:
 
 - `lead_intelligence` — written only by the sync.
@@ -209,13 +227,13 @@ Put in triggers rather than application code, so it holds no matter which client
 | `/login` | Sign in (server action; no credentials in client JS) |
 | `/dashboard` | Today's tasks, upcoming appointments, weighted pipeline, recent leads |
 | `/leads` | Filterable list — stage, minimum score, company-name search |
-| `/leads/[id]` | CRM state, business intelligence, contacts, activity timeline, stage history |
+| `/leads/[id]` | CRM state, intelligence, timeline + CRUD for contacts, tasks, appointments, opportunities, notes |
 | `/pipeline` | Board, one column per active stage |
-| `/tasks` | Open tasks, grouped overdue / scheduled / undated |
-| `/calendar` | Upcoming appointments by day |
-| `/opportunities` | Deals, contract value and weighted value |
-| `/clients` | Accounts |
-| `/clients/[id]` | Contracts, payments, activity |
+| `/tasks` | Open tasks grouped by urgency; create, edit, complete, reopen, delete |
+| `/calendar` | Appointments by day; book, edit, change status, delete |
+| `/opportunities` | Deals with value totals; create, edit, delete, convert a won deal to a client |
+| `/clients` | Accounts; create |
+| `/clients/[id]` | Account edit, contracts, payments, notes, tasks |
 | `/payments` | All invoices, read-only |
 
 Every one is a server component reading through the session-scoped client, so RLS applies

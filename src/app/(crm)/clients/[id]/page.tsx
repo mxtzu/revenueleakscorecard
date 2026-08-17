@@ -22,15 +22,23 @@ import {
   Row,
   Table
 } from '@/components/crm/ui';
+import { ClientForm, NoteForm, TaskForm } from '@/components/crm/entityForms';
+import { ActionError, DeleteForm, Disclosure, ReadOnlyNotice } from '@/components/crm/forms';
 import { formatDate, formatDateTime, formatMoney, humanise, orDash } from '@/lib/crm/format';
+import { noteText } from '@/lib/crm/mutations';
+import { canWrite, isAdmin } from '@/lib/crm/permissions';
 import {
   getClientById,
   listActivitiesForClient,
+  listAssignableProfiles,
   listContractsForClient,
+  listNotesForClient,
   listPaymentsForClient
 } from '@/lib/crm/queries';
-import { crmClient } from '@/lib/crm/server';
+import { crmSession } from '@/lib/crm/server';
 import type { ClientStatus, PaymentStatus } from '@/lib/crm/types';
+
+import { removeClient, removeNote, saveClient, saveNote, saveTask } from '../../_actions/crud';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,16 +59,32 @@ const PAYMENT_TONE: Record<PaymentStatus, 'neutral' | 'positive' | 'warning' | '
   cancelled: 'neutral'
 };
 
-export default async function ClientDetailPage({ params }: { params: { id: string } }) {
-  const supabase = crmClient();
+export default async function ClientDetailPage({
+  params,
+  searchParams
+}: {
+  params: { id: string };
+  searchParams?: { error?: string };
+}) {
+  const { client: supabase, profile } = await crmSession();
   const account = await getClientById(supabase, params.id);
   if (!account) notFound();
 
-  const [contracts, payments, activities] = await Promise.all([
+  const [contracts, payments, activities, notes, team] = await Promise.all([
     listContractsForClient(supabase, account.id),
     listPaymentsForClient(supabase, account.id),
-    listActivitiesForClient(supabase, account.id)
+    listActivitiesForClient(supabase, account.id),
+    listNotesForClient(supabase, account.id),
+    listAssignableProfiles(supabase)
   ]);
+
+  const here = `/clients/${params.id}`;
+  const writable = canWrite(profile);
+  const deletable = isAdmin(profile);
+  const people = team.map((member) => ({
+    value: member.id,
+    label: member.full_name ?? member.email ?? 'Unnamed'
+  }));
 
   const collected = payments
     .filter((payment) => payment.status === 'paid')
@@ -77,6 +101,8 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
         title={account.company_name}
         actions={<Badge tone={CLIENT_TONE[account.status]}>{account.status}</Badge>}
       />
+
+      <ActionError message={searchParams?.error} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card title="Account">
@@ -96,6 +122,101 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
               )}
             </Field>
           </FieldGrid>
+
+          <div className="mt-5 space-y-2 border-t border-line-soft pt-4">
+            {writable ? (
+              <>
+                <Disclosure summary="Edit account">
+                  <ClientForm
+                    action={saveClient}
+                    returnTo={here}
+                    record={account}
+                    people={people}
+                  />
+                </Disclosure>
+                <DeleteForm
+                  action={removeClient}
+                  id={account.id}
+                  label="Delete client"
+                  warning="Contracts, payments, tasks and notes belonging to this client are deleted with it. A churned client is better recorded as churned."
+                  allowed={deletable}
+                />
+              </>
+            ) : (
+              <ReadOnlyNotice what="edit this client" />
+            )}
+          </div>
+        </Card>
+
+        <Card title="Notes">
+          {notes.length === 0 ? (
+            <EmptyState title="No notes" />
+          ) : (
+            <ul className="space-y-2">
+              {notes.map((note) => (
+                <li key={note.id} className="rounded-lg border border-line-soft px-3 py-2.5">
+                  {note.title ? (
+                    <p className="text-sm font-medium text-white/85">{note.title}</p>
+                  ) : null}
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-white/65">{noteText(note)}</p>
+                  <p className="mt-1.5 text-xs text-white/30">{formatDateTime(note.created_at)}</p>
+                  {writable ? (
+                    <div className="mt-2.5 space-y-2 border-t border-line-soft pt-2.5">
+                      <Disclosure summary="Edit">
+                        <NoteForm
+                          action={saveNote}
+                          returnTo={here}
+                          note={note}
+                          clientId={account.id}
+                        />
+                      </Disclosure>
+                      <DeleteForm
+                        action={removeNote}
+                        id={note.id}
+                        hidden={{ client_id: account.id, return_to: here }}
+                        label="Delete note"
+                        warning="This note will be removed permanently."
+                        allowed={deletable}
+                      />
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="mt-4 border-t border-line-soft pt-4">
+            {writable ? (
+              <Disclosure summary="Add a note" tone="primary">
+                <NoteForm action={saveNote} returnTo={here} clientId={account.id} />
+              </Disclosure>
+            ) : (
+              <ReadOnlyNotice what="add notes" />
+            )}
+          </div>
+        </Card>
+
+        <Card title="Tasks">
+          <div>
+            {writable ? (
+              <Disclosure summary="Add a task for this client" tone="primary">
+                <TaskForm
+                  action={saveTask}
+                  returnTo={here}
+                  clientId={account.id}
+                  people={people}
+                />
+              </Disclosure>
+            ) : (
+              <ReadOnlyNotice what="create tasks" />
+            )}
+            <p className="mt-3 text-xs text-white/35">
+              Open tasks for every account are listed together on{' '}
+              <Link href="/tasks" className="text-electric-300 hover:underline">
+                Tasks
+              </Link>
+              .
+            </p>
+          </div>
         </Card>
 
         <Card title="Contracts" className="xl:col-span-2">
