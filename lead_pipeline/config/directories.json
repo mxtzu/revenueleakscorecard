@@ -1,0 +1,27 @@
+{
+  "$comment": [
+    "Public business directory adapters. Ships EMPTY on purpose.",
+    "Only add a directory you are permitted to crawl: check the site's Terms of Service and robots.txt first.",
+    "The adapter refuses to run against a URL that robots.txt disallows for our user agent, never solves CAPTCHAs,",
+    "and never sends credentials. Each entry is parsed with CSS selectors against the public HTML listing page.",
+    "",
+    "Entry format:",
+    "{",
+    "  'name': 'example_directory',",
+    "  'enabled': true,",
+    "  'attribution': 'Example Directory (public listings)',",
+    "  'search_url': 'https://example.com/search?what={query}&where={location}&page={page}',",
+    "  'max_pages': 2,",
+    "  'rate_per_second': 0.5,",
+    "  'result_selector': 'div.listing',",
+    "  'fields': {",
+    "    'company_name': {'selector': 'h2 a', 'attr': 'text'},",
+    "    'website':      {'selector': 'a.website', 'attr': 'href'},",
+    "    'business_phone': {'selector': 'span.tel', 'attr': 'text'},",
+    "    'address':      {'selector': 'span.address', 'attr': 'text'},",
+    "    'source_url':   {'selector': 'h2 a', 'attr': 'href'}",
+    "  }",
+    "}"
+  ],
+  "directories": []
+}

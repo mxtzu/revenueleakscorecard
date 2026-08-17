@@ -1,0 +1,1320 @@
+{
+  "$comment": "Niche definitions. Add a new vertical by adding a key here - no code changes required. ticket_value / search_demand / competition are 1-10 analyst estimates that feed the lead score.",
+  "niches": {
+    "cosmetic_dentists": {
+      "label": "Cosmetic dentists",
+      "aliases": [
+        "cosmetic dentist",
+        "cosmetic dentistry",
+        "dentists",
+        "dentist",
+        "dental"
+      ],
+      "search_terms": [
+        "cosmetic dentist",
+        "veneers dentist",
+        "composite bonding",
+        "teeth whitening clinic",
+        "smile makeover dentist"
+      ],
+      "google_place_types": [
+        "dentist",
+        "dental_clinic"
+      ],
+      "osm_filters": [
+        "nwr[\"amenity\"=\"dentist\"]",
+        "nwr[\"healthcare\"=\"dentist\"]"
+      ],
+      "ticket_value": 9,
+      "search_demand": 8,
+      "competition": 9,
+      "service_keywords": [
+        "veneers",
+        "porcelain veneers",
+        "composite bonding",
+        "teeth whitening",
+        "smile makeover",
+        "dental implants",
+        "implants",
+        "invisalign",
+        "clear aligners",
+        "orthodontics",
+        "hygienist",
+        "full mouth reconstruction"
+      ],
+      "premium_keywords": [
+        "smile design",
+        "digital smile design",
+        "award winning",
+        "bespoke",
+        "private dentistry",
+        "harley street",
+        "boutique"
+      ],
+      "trust_keywords": [
+        "before and after",
+        "before & after",
+        "smile gallery",
+        "patient stories",
+        "testimonial",
+        "gdc",
+        "case study",
+        "google reviews"
+      ],
+      "conversion_keywords": [
+        "book a consultation",
+        "free consultation",
+        "book online",
+        "request a callback",
+        "smile assessment",
+        "new patient offer"
+      ],
+      "finance_keywords": [
+        "0% finance",
+        "finance available",
+        "payment plan",
+        "monthly payments",
+        "spread the cost"
+      ],
+      "money_pages": [
+        {
+          "name": "Veneers",
+          "keywords": [
+            "veneers",
+            "porcelain veneers"
+          ],
+          "url_hints": [
+            "veneer"
+          ]
+        },
+        {
+          "name": "Composite bonding",
+          "keywords": [
+            "composite bonding",
+            "edge bonding"
+          ],
+          "url_hints": [
+            "bonding"
+          ]
+        },
+        {
+          "name": "Teeth whitening",
+          "keywords": [
+            "teeth whitening",
+            "tooth whitening"
+          ],
+          "url_hints": [
+            "whitening"
+          ]
+        },
+        {
+          "name": "Smile makeover",
+          "keywords": [
+            "smile makeover",
+            "smile design"
+          ],
+          "url_hints": [
+            "smile-makeover",
+            "smile-design"
+          ]
+        },
+        {
+          "name": "Dental implants",
+          "keywords": [
+            "dental implants",
+            "implant"
+          ],
+          "url_hints": [
+            "implant"
+          ]
+        },
+        {
+          "name": "Invisalign",
+          "keywords": [
+            "invisalign",
+            "clear aligners"
+          ],
+          "url_hints": [
+            "invisalign",
+            "aligner"
+          ]
+        }
+      ],
+      "negative_keywords": [
+        "nhs only",
+        "emergency dentist only"
+      ],
+      "recommended_service": "Landing Page + Google Ads + Meta Ads",
+      "notes": "Individual treatment values of GBP 2k-15k make paid acquisition viable at agency retainers.",
+      "osm_name_keywords": [
+        "dental",
+        "dentist",
+        "dentistry",
+        "orthodontic",
+        "smile"
+      ]
+    },
+    "invisalign_dental_practices": {
+      "label": "Invisalign / dental practices",
+      "aliases": [
+        "invisalign",
+        "dental practices",
+        "dental practice",
+        "orthodontist",
+        "orthodontics"
+      ],
+      "search_terms": [
+        "invisalign provider",
+        "invisalign dentist",
+        "clear aligners dentist",
+        "orthodontist",
+        "dental practice"
+      ],
+      "google_place_types": [
+        "dentist",
+        "dental_clinic",
+        "orthodontist"
+      ],
+      "osm_filters": [
+        "nwr[\"amenity\"=\"dentist\"]",
+        "nwr[\"healthcare:speciality\"=\"orthodontics\"]"
+      ],
+      "ticket_value": 8,
+      "search_demand": 9,
+      "competition": 9,
+      "service_keywords": [
+        "invisalign",
+        "clear aligners",
+        "invisalign lite",
+        "invisalign go",
+        "fixed braces",
+        "ceramic braces",
+        "retainers",
+        "teeth straightening",
+        "orthodontics"
+      ],
+      "premium_keywords": [
+        "diamond provider",
+        "platinum provider",
+        "invisalign provider",
+        "itero",
+        "3d scan"
+      ],
+      "trust_keywords": [
+        "before and after",
+        "before & after",
+        "results gallery",
+        "patient reviews",
+        "testimonial",
+        "case study"
+      ],
+      "conversion_keywords": [
+        "free invisalign consultation",
+        "book a consultation",
+        "book online",
+        "smile assessment",
+        "virtual consultation",
+        "itero scan"
+      ],
+      "finance_keywords": [
+        "0% finance",
+        "finance available",
+        "payment plan",
+        "monthly payments",
+        "per month"
+      ],
+      "money_pages": [
+        {
+          "name": "Invisalign",
+          "keywords": [
+            "invisalign",
+            "clear aligners"
+          ],
+          "url_hints": [
+            "invisalign",
+            "aligner"
+          ]
+        },
+        {
+          "name": "Teeth straightening",
+          "keywords": [
+            "teeth straightening",
+            "braces"
+          ],
+          "url_hints": [
+            "braces",
+            "straighten"
+          ]
+        },
+        {
+          "name": "Free consultation",
+          "keywords": [
+            "free consultation",
+            "book a consultation"
+          ],
+          "url_hints": [
+            "consultation",
+            "book"
+          ]
+        }
+      ],
+      "negative_keywords": [],
+      "recommended_service": "Invisalign Landing Page + Google Ads",
+      "notes": "Invisalign cases are GBP 2.5k-5k; a dedicated consultation funnel is the classic missing asset.",
+      "osm_name_keywords": [
+        "dental",
+        "dentist",
+        "dentistry",
+        "orthodontic",
+        "braces"
+      ]
+    },
+    "aesthetic_clinics": {
+      "label": "Aesthetic clinics",
+      "aliases": [
+        "aesthetic clinic",
+        "aesthetics",
+        "medical aesthetics",
+        "botox clinic",
+        "skin clinic"
+      ],
+      "search_terms": [
+        "aesthetic clinic",
+        "botox clinic",
+        "dermal fillers clinic",
+        "skin clinic",
+        "medical aesthetics clinic"
+      ],
+      "google_place_types": [
+        "beauty_salon",
+        "medical_clinic",
+        "skin_care_clinic"
+      ],
+      "osm_filters": [
+        "nwr[\"shop\"=\"beauty\"]",
+        "nwr[\"healthcare\"=\"clinic\"]"
+      ],
+      "ticket_value": 8,
+      "search_demand": 8,
+      "competition": 8,
+      "service_keywords": [
+        "botox",
+        "anti-wrinkle",
+        "anti wrinkle injections",
+        "dermal fillers",
+        "lip filler",
+        "skin boosters",
+        "profhilo",
+        "microneedling",
+        "chemical peel",
+        "laser hair removal",
+        "skin treatments",
+        "prp",
+        "polynucleotides"
+      ],
+      "premium_keywords": [
+        "doctor led",
+        "nurse prescriber",
+        "cqc",
+        "medically led",
+        "clinic packages",
+        "membership"
+      ],
+      "trust_keywords": [
+        "before and after",
+        "results gallery",
+        "reviews",
+        "testimonial",
+        "qualified",
+        "insured"
+      ],
+      "conversion_keywords": [
+        "book a consultation",
+        "free consultation",
+        "book online",
+        "treatment packages",
+        "book now",
+        "enquire now"
+      ],
+      "finance_keywords": [
+        "finance available",
+        "payment plan",
+        "0% finance",
+        "monthly plan",
+        "klarna"
+      ],
+      "money_pages": [
+        {
+          "name": "Anti-wrinkle / Botox",
+          "keywords": [
+            "botox",
+            "anti-wrinkle",
+            "anti wrinkle"
+          ],
+          "url_hints": [
+            "botox",
+            "anti-wrinkle"
+          ]
+        },
+        {
+          "name": "Dermal fillers",
+          "keywords": [
+            "dermal fillers",
+            "lip filler"
+          ],
+          "url_hints": [
+            "filler"
+          ]
+        },
+        {
+          "name": "Skin treatments",
+          "keywords": [
+            "skin treatments",
+            "chemical peel",
+            "microneedling"
+          ],
+          "url_hints": [
+            "skin",
+            "peel",
+            "microneedling"
+          ]
+        },
+        {
+          "name": "Consultation booking",
+          "keywords": [
+            "book a consultation",
+            "consultation"
+          ],
+          "url_hints": [
+            "consultation",
+            "book"
+          ]
+        }
+      ],
+      "negative_keywords": [
+        "tanning only"
+      ],
+      "recommended_service": "Treatment Landing Pages + Meta Ads",
+      "notes": "Repeat treatment cycles produce strong LTV; Meta creative testing usually outperforms search alone.",
+      "osm_name_keywords": [
+        "aesthetic",
+        "aesthetics",
+        "skin",
+        "cosmetic",
+        "botox",
+        "beauty"
+      ]
+    },
+    "hair_transplant_clinics": {
+      "label": "Hair transplant clinics",
+      "aliases": [
+        "hair transplant",
+        "hair restoration",
+        "hair clinic",
+        "fue clinic"
+      ],
+      "search_terms": [
+        "hair transplant clinic",
+        "fue hair transplant",
+        "hair restoration clinic",
+        "hair loss clinic"
+      ],
+      "google_place_types": [
+        "medical_clinic",
+        "hair_care"
+      ],
+      "osm_filters": [
+        "nwr[\"healthcare\"=\"clinic\"]"
+      ],
+      "ticket_value": 10,
+      "search_demand": 8,
+      "competition": 9,
+      "service_keywords": [
+        "hair transplant",
+        "fue",
+        "fut",
+        "dhi",
+        "hair restoration",
+        "hair loss treatment",
+        "prp hair",
+        "scalp micropigmentation",
+        "beard transplant",
+        "graft"
+      ],
+      "premium_keywords": [
+        "surgeon",
+        "gmc registered",
+        "cqc",
+        "consultant",
+        "clinic accredited",
+        "uk clinic"
+      ],
+      "trust_keywords": [
+        "before and after",
+        "results gallery",
+        "patient results",
+        "testimonial",
+        "case study",
+        "reviews"
+      ],
+      "conversion_keywords": [
+        "free consultation",
+        "book a consultation",
+        "free assessment",
+        "get a quote",
+        "whatsapp consultation",
+        "photo assessment"
+      ],
+      "finance_keywords": [
+        "0% finance",
+        "finance available",
+        "payment plan",
+        "monthly payments",
+        "spread the cost"
+      ],
+      "money_pages": [
+        {
+          "name": "FUE hair transplant",
+          "keywords": [
+            "fue",
+            "fue hair transplant"
+          ],
+          "url_hints": [
+            "fue"
+          ]
+        },
+        {
+          "name": "FUT hair transplant",
+          "keywords": [
+            "fut",
+            "strip"
+          ],
+          "url_hints": [
+            "fut"
+          ]
+        },
+        {
+          "name": "Pricing / finance",
+          "keywords": [
+            "cost",
+            "price",
+            "finance"
+          ],
+          "url_hints": [
+            "cost",
+            "price",
+            "finance"
+          ]
+        },
+        {
+          "name": "Consultation funnel",
+          "keywords": [
+            "free consultation",
+            "book a consultation"
+          ],
+          "url_hints": [
+            "consultation",
+            "book"
+          ]
+        }
+      ],
+      "negative_keywords": [
+        "wigs only"
+      ],
+      "recommended_service": "Consultation Funnel + Google Ads + Meta Ads",
+      "notes": "GBP 3k-10k procedures with a long consideration cycle - retargeting and finance messaging matter.",
+      "osm_name_keywords": [
+        "transplant",
+        "restoration",
+        "trichology",
+        "hairline"
+      ]
+    },
+    "roofers": {
+      "label": "Roofers",
+      "aliases": [
+        "roofer",
+        "roofing",
+        "roofing company",
+        "roofing contractor"
+      ],
+      "search_terms": [
+        "roofer",
+        "roofing company",
+        "roof repair",
+        "flat roofing specialist",
+        "emergency roofer"
+      ],
+      "google_place_types": [
+        "roofing_contractor",
+        "general_contractor"
+      ],
+      "osm_filters": [
+        "nwr[\"craft\"=\"roofer\"]",
+        "nwr[\"shop\"=\"trade\"]"
+      ],
+      "ticket_value": 7,
+      "search_demand": 8,
+      "competition": 7,
+      "service_keywords": [
+        "roof repair",
+        "roof replacement",
+        "new roof",
+        "emergency roofing",
+        "flat roof",
+        "pitched roof",
+        "epdm",
+        "grp roofing",
+        "chimney",
+        "guttering",
+        "fascias",
+        "soffits",
+        "commercial roofing",
+        "roof survey"
+      ],
+      "premium_keywords": [
+        "insurance backed guarantee",
+        "10 year guarantee",
+        "20 year guarantee",
+        "checkatrade",
+        "which trusted trader",
+        "niceic"
+      ],
+      "trust_keywords": [
+        "before and after",
+        "recent work",
+        "gallery",
+        "testimonial",
+        "reviews",
+        "case study",
+        "accredited"
+      ],
+      "conversion_keywords": [
+        "free quote",
+        "free survey",
+        "call now",
+        "request a callback",
+        "get a quote",
+        "24/7",
+        "emergency call out"
+      ],
+      "finance_keywords": [
+        "finance available",
+        "payment plan",
+        "spread the cost",
+        "0% finance"
+      ],
+      "money_pages": [
+        {
+          "name": "Emergency roofing",
+          "keywords": [
+            "emergency roofing",
+            "emergency roof repair",
+            "24/7"
+          ],
+          "url_hints": [
+            "emergency"
+          ]
+        },
+        {
+          "name": "Roof replacement",
+          "keywords": [
+            "roof replacement",
+            "new roof"
+          ],
+          "url_hints": [
+            "roof-replacement",
+            "new-roof"
+          ]
+        },
+        {
+          "name": "Roof repair",
+          "keywords": [
+            "roof repair",
+            "roof repairs"
+          ],
+          "url_hints": [
+            "repair"
+          ]
+        },
+        {
+          "name": "Commercial roofing",
+          "keywords": [
+            "commercial roofing",
+            "industrial roofing"
+          ],
+          "url_hints": [
+            "commercial",
+            "industrial"
+          ]
+        }
+      ],
+      "negative_keywords": [
+        "roofing supplies only",
+        "builders merchant"
+      ],
+      "recommended_service": "Service Landing Pages + Google Ads",
+      "notes": "Emergency and replacement searches convert on the call - phone CTA and speed are the levers.",
+      "osm_name_keywords": [
+        "roofing",
+        "roofer",
+        "roofline",
+        "guttering"
+      ]
+    },
+    "driveways_paving": {
+      "label": "Driveway / paving companies",
+      "aliases": [
+        "driveways",
+        "driveway",
+        "paving",
+        "block paving",
+        "resin driveways",
+        "landscaping"
+      ],
+      "search_terms": [
+        "driveway company",
+        "block paving specialist",
+        "resin driveway installer",
+        "tarmac driveway",
+        "patio installer"
+      ],
+      "google_place_types": [
+        "general_contractor",
+        "paving_contractor"
+      ],
+      "osm_filters": [
+        "nwr[\"craft\"=\"paver\"]",
+        "nwr[\"landuse\"=\"industrial\"][\"name\"~\"paving\",i]"
+      ],
+      "ticket_value": 7,
+      "search_demand": 7,
+      "competition": 7,
+      "service_keywords": [
+        "block paving",
+        "resin driveway",
+        "resin bound",
+        "tarmac",
+        "imprinted concrete",
+        "patios",
+        "driveway replacement",
+        "landscaping",
+        "garden design",
+        "fencing",
+        "artificial grass",
+        "drainage"
+      ],
+      "premium_keywords": [
+        "bespoke",
+        "premium",
+        "10 year guarantee",
+        "sudS compliant",
+        "marshalls approved",
+        "brett approved"
+      ],
+      "trust_keywords": [
+        "before and after",
+        "recent projects",
+        "gallery",
+        "testimonial",
+        "reviews",
+        "case study"
+      ],
+      "conversion_keywords": [
+        "free quote",
+        "free design",
+        "get a quote",
+        "book a survey",
+        "call now",
+        "request a callback"
+      ],
+      "finance_keywords": [
+        "finance available",
+        "0% finance",
+        "payment plan",
+        "spread the cost"
+      ],
+      "money_pages": [
+        {
+          "name": "Resin driveways",
+          "keywords": [
+            "resin driveway",
+            "resin bound"
+          ],
+          "url_hints": [
+            "resin"
+          ]
+        },
+        {
+          "name": "Block paving",
+          "keywords": [
+            "block paving"
+          ],
+          "url_hints": [
+            "block-paving",
+            "paving"
+          ]
+        },
+        {
+          "name": "Tarmac",
+          "keywords": [
+            "tarmac",
+            "asphalt"
+          ],
+          "url_hints": [
+            "tarmac",
+            "asphalt"
+          ]
+        },
+        {
+          "name": "Patios",
+          "keywords": [
+            "patio",
+            "patios"
+          ],
+          "url_hints": [
+            "patio"
+          ]
+        }
+      ],
+      "negative_keywords": [
+        "supplies only",
+        "stone merchant"
+      ],
+      "recommended_service": "Driveway Quote Landing Page + Google Ads",
+      "notes": "GBP 4k-15k jobs; before/after galleries are the single strongest conversion asset.",
+      "osm_name_keywords": [
+        "paving",
+        "driveway",
+        "driveways",
+        "tarmac",
+        "landscaping"
+      ]
+    },
+    "builders": {
+      "label": "Builders",
+      "aliases": [
+        "builder",
+        "building company",
+        "construction company",
+        "extensions"
+      ],
+      "search_terms": [
+        "builders",
+        "house extension builder",
+        "loft conversion company",
+        "renovation contractor",
+        "new build contractor"
+      ],
+      "google_place_types": [
+        "general_contractor"
+      ],
+      "osm_filters": [
+        "nwr[\"craft\"=\"builder\"]",
+        "nwr[\"office\"=\"construction_company\"]"
+      ],
+      "ticket_value": 9,
+      "search_demand": 7,
+      "competition": 7,
+      "service_keywords": [
+        "extensions",
+        "house extension",
+        "renovations",
+        "new builds",
+        "loft conversion",
+        "garage conversion",
+        "kitchens",
+        "bathrooms",
+        "structural work",
+        "groundworks",
+        "basement conversion",
+        "refurbishment"
+      ],
+      "premium_keywords": [
+        "architect",
+        "design and build",
+        "fmb",
+        "federation of master builders",
+        "nhbc",
+        "turnkey",
+        "riba"
+      ],
+      "trust_keywords": [
+        "case study",
+        "recent projects",
+        "portfolio",
+        "before and after",
+        "testimonial",
+        "reviews",
+        "accredited"
+      ],
+      "conversion_keywords": [
+        "free quote",
+        "book a site visit",
+        "request a callback",
+        "get a quote",
+        "arrange a consultation"
+      ],
+      "finance_keywords": [
+        "finance available",
+        "staged payments",
+        "payment plan"
+      ],
+      "money_pages": [
+        {
+          "name": "Extensions",
+          "keywords": [
+            "house extension",
+            "extensions"
+          ],
+          "url_hints": [
+            "extension"
+          ]
+        },
+        {
+          "name": "Loft conversions",
+          "keywords": [
+            "loft conversion"
+          ],
+          "url_hints": [
+            "loft"
+          ]
+        },
+        {
+          "name": "Renovations",
+          "keywords": [
+            "renovation",
+            "refurbishment"
+          ],
+          "url_hints": [
+            "renovation",
+            "refurb"
+          ]
+        },
+        {
+          "name": "New builds",
+          "keywords": [
+            "new build",
+            "new builds"
+          ],
+          "url_hints": [
+            "new-build"
+          ]
+        }
+      ],
+      "negative_keywords": [
+        "builders merchant",
+        "supplies"
+      ],
+      "recommended_service": "Project Landing Pages + Google Ads",
+      "notes": "Project values of GBP 30k-250k mean a single won job repays a year of retainer.",
+      "osm_name_keywords": [
+        "builders",
+        "building",
+        "construction",
+        "joinery",
+        "carpentry"
+      ]
+    },
+    "kitchens_bathrooms": {
+      "label": "Kitchens / bathrooms",
+      "aliases": [
+        "kitchens",
+        "bathrooms",
+        "kitchen fitters",
+        "bathroom fitters",
+        "kitchen showroom"
+      ],
+      "search_terms": [
+        "kitchen showroom",
+        "fitted kitchens",
+        "kitchen installer",
+        "bathroom showroom",
+        "bathroom installer"
+      ],
+      "google_place_types": [
+        "home_improvement_store",
+        "furniture_store",
+        "general_contractor"
+      ],
+      "osm_filters": [
+        "nwr[\"shop\"=\"kitchen\"]",
+        "nwr[\"shop\"=\"bathroom_furnishing\"]"
+      ],
+      "ticket_value": 8,
+      "search_demand": 7,
+      "competition": 7,
+      "service_keywords": [
+        "fitted kitchens",
+        "kitchen installation",
+        "bespoke kitchens",
+        "handmade kitchens",
+        "kitchen design",
+        "bathroom installation",
+        "bathroom design",
+        "wet room",
+        "shower room",
+        "renovations",
+        "showroom",
+        "worktops"
+      ],
+      "premium_keywords": [
+        "bespoke",
+        "handmade",
+        "german kitchens",
+        "luxury",
+        "showroom",
+        "in-frame",
+        "designer"
+      ],
+      "trust_keywords": [
+        "portfolio",
+        "recent installations",
+        "before and after",
+        "testimonial",
+        "reviews",
+        "case study"
+      ],
+      "conversion_keywords": [
+        "book a design consultation",
+        "free design",
+        "visit our showroom",
+        "book an appointment",
+        "free quote"
+      ],
+      "finance_keywords": [
+        "0% finance",
+        "interest free credit",
+        "finance available",
+        "monthly payments"
+      ],
+      "money_pages": [
+        {
+          "name": "Fitted kitchens",
+          "keywords": [
+            "fitted kitchens",
+            "kitchen installation"
+          ],
+          "url_hints": [
+            "kitchen"
+          ]
+        },
+        {
+          "name": "Bathroom installation",
+          "keywords": [
+            "bathroom installation",
+            "bathroom fitting"
+          ],
+          "url_hints": [
+            "bathroom"
+          ]
+        },
+        {
+          "name": "Design consultation",
+          "keywords": [
+            "design consultation",
+            "free design"
+          ],
+          "url_hints": [
+            "design",
+            "consultation",
+            "book"
+          ]
+        },
+        {
+          "name": "Showroom visit",
+          "keywords": [
+            "showroom"
+          ],
+          "url_hints": [
+            "showroom",
+            "visit"
+          ]
+        }
+      ],
+      "negative_keywords": [
+        "trade only",
+        "wholesale"
+      ],
+      "recommended_service": "Showroom Booking Landing Page + Meta Ads",
+      "notes": "Showroom appointment is the real conversion event - most sites bury it.",
+      "osm_name_keywords": [
+        "kitchens",
+        "bathrooms",
+        "kitchen",
+        "bathroom",
+        "worktops"
+      ]
+    },
+    "solar_installers": {
+      "label": "Solar installers",
+      "aliases": [
+        "solar",
+        "solar panels",
+        "solar pv",
+        "renewables installer"
+      ],
+      "search_terms": [
+        "solar panel installer",
+        "solar pv company",
+        "battery storage installer",
+        "solar and battery installer"
+      ],
+      "google_place_types": [
+        "solar_energy_contractor",
+        "electrician",
+        "general_contractor"
+      ],
+      "osm_filters": [
+        "nwr[\"craft\"=\"electrician\"][\"name\"~\"solar\",i]",
+        "nwr[\"shop\"=\"energy\"]"
+      ],
+      "ticket_value": 9,
+      "search_demand": 8,
+      "competition": 8,
+      "service_keywords": [
+        "solar panels",
+        "solar pv",
+        "battery storage",
+        "ev charging",
+        "ev charger",
+        "commercial solar",
+        "installation",
+        "inverter",
+        "heat pump",
+        "smart export guarantee",
+        "savings calculator",
+        "energy savings"
+      ],
+      "premium_keywords": [
+        "mcs certified",
+        "mcs",
+        "niceic",
+        "rec approved",
+        "tesla powerwall",
+        "givenergy",
+        "10 year warranty"
+      ],
+      "trust_keywords": [
+        "case study",
+        "recent installations",
+        "testimonial",
+        "reviews",
+        "accredited",
+        "trustmark"
+      ],
+      "conversion_keywords": [
+        "free quote",
+        "free survey",
+        "savings calculator",
+        "book a survey",
+        "get a quote",
+        "request a callback"
+      ],
+      "finance_keywords": [
+        "0% finance",
+        "finance available",
+        "buy now pay later",
+        "monthly payments",
+        "solar finance"
+      ],
+      "money_pages": [
+        {
+          "name": "Solar panels",
+          "keywords": [
+            "solar panels",
+            "solar pv"
+          ],
+          "url_hints": [
+            "solar",
+            "panels"
+          ]
+        },
+        {
+          "name": "Battery storage",
+          "keywords": [
+            "battery storage",
+            "home battery"
+          ],
+          "url_hints": [
+            "battery",
+            "storage"
+          ]
+        },
+        {
+          "name": "EV charging",
+          "keywords": [
+            "ev charging",
+            "ev charger"
+          ],
+          "url_hints": [
+            "ev-charging",
+            "ev-charger"
+          ]
+        },
+        {
+          "name": "Savings calculator",
+          "keywords": [
+            "savings calculator",
+            "calculate your savings"
+          ],
+          "url_hints": [
+            "calculator",
+            "savings"
+          ]
+        },
+        {
+          "name": "Commercial solar",
+          "keywords": [
+            "commercial solar"
+          ],
+          "url_hints": [
+            "commercial"
+          ]
+        }
+      ],
+      "negative_keywords": [
+        "solar supplies",
+        "wholesale only"
+      ],
+      "recommended_service": "Quote Calculator Landing Page + Google Ads",
+      "notes": "GBP 6k-15k installs with strong search demand; a savings calculator lifts lead rate materially.",
+      "osm_name_keywords": [
+        "solar",
+        "renewables",
+        "renewable",
+        "photovoltaic"
+      ]
+    },
+    "car_detailing_wrapping": {
+      "label": "High-end car detailing / wrapping",
+      "aliases": [
+        "car detailing",
+        "detailing",
+        "car wrapping",
+        "vehicle wrapping",
+        "ppf",
+        "ceramic coating"
+      ],
+      "search_terms": [
+        "car detailing studio",
+        "ceramic coating specialist",
+        "paint protection film installer",
+        "car wrapping company",
+        "paint correction specialist"
+      ],
+      "google_place_types": [
+        "car_detailing",
+        "car_wash",
+        "car_repair"
+      ],
+      "osm_filters": [
+        "nwr[\"shop\"=\"car_repair\"][\"name\"~\"detail|wrap\",i]",
+        "nwr[\"amenity\"=\"car_wash\"]"
+      ],
+      "ticket_value": 7,
+      "search_demand": 6,
+      "competition": 6,
+      "service_keywords": [
+        "ceramic coating",
+        "ppf",
+        "paint protection film",
+        "paint correction",
+        "vinyl wrapping",
+        "car wrapping",
+        "window tinting",
+        "detailing packages",
+        "machine polish",
+        "new car protection",
+        "gtechniq",
+        "xpel"
+      ],
+      "premium_keywords": [
+        "supercar",
+        "exotic",
+        "prestige",
+        "luxury",
+        "approved detailer",
+        "accredited installer",
+        "studio"
+      ],
+      "trust_keywords": [
+        "before and after",
+        "gallery",
+        "recent work",
+        "testimonial",
+        "reviews",
+        "instagram"
+      ],
+      "conversion_keywords": [
+        "book now",
+        "get a quote",
+        "book your slot",
+        "enquire now",
+        "check availability",
+        "request a quote"
+      ],
+      "finance_keywords": [
+        "finance available",
+        "payment plan",
+        "klarna"
+      ],
+      "money_pages": [
+        {
+          "name": "Ceramic coating",
+          "keywords": [
+            "ceramic coating"
+          ],
+          "url_hints": [
+            "ceramic"
+          ]
+        },
+        {
+          "name": "Paint protection film",
+          "keywords": [
+            "ppf",
+            "paint protection film"
+          ],
+          "url_hints": [
+            "ppf",
+            "paint-protection"
+          ]
+        },
+        {
+          "name": "Paint correction",
+          "keywords": [
+            "paint correction",
+            "machine polish"
+          ],
+          "url_hints": [
+            "correction",
+            "polish"
+          ]
+        },
+        {
+          "name": "Vehicle wrapping",
+          "keywords": [
+            "vinyl wrap",
+            "car wrapping"
+          ],
+          "url_hints": [
+            "wrap"
+          ]
+        }
+      ],
+      "negative_keywords": [
+        "hand car wash",
+        "valeting only"
+      ],
+      "recommended_service": "Booking Landing Page + Meta Ads",
+      "notes": "Premium packages run GBP 1k-5k; Meta creative with before/after footage is the natural channel.",
+      "osm_name_keywords": [
+        "detailing",
+        "valeting",
+        "wrapping",
+        "wraps",
+        "tinting"
+      ]
+    }
+  }
+}

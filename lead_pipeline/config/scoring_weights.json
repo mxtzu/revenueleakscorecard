@@ -1,0 +1,10 @@
+{
+  "$comment": "Category caps for the 0-100 lead score. Change these to re-weight the model; the scorer rescales each category's internal points to the cap you set here.",
+  "weights": {
+    "business_value": 25,
+    "marketing_opportunity": 25,
+    "paid_acquisition": 20,
+    "credibility": 15,
+    "outreach_accessibility": 15
+  }
+}

@@ -1,0 +1,8 @@
+# Runtime dependencies (Python 3.10+)
+aiohttp>=3.9,<4          # async HTTP transport
+beautifulsoup4>=4.12,<5  # HTML parsing for website analysis
+python-dotenv>=1.0,<2    # .env loading (optional: a stdlib fallback is built in)
+
+# Development / testing
+pytest>=8.0
+pytest-asyncio>=0.23

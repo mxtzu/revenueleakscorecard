@@ -1,0 +1,758 @@
+# Agency CRM
+
+The CRM turns the output of `lead_pipeline/` into a sales process: stages, owners,
+activity history, opportunities, clients and payment records. It is built *around* the
+pipeline, not into it — the Python code is untouched and still runs standalone.
+
+---
+
+## The boundary
+
+Two systems, one join key.
+
+```
+lead_pipeline (Python, SQLite, offline)          CRM (Next.js + Supabase Postgres)
+─────────────────────────────────────            ─────────────────────────────────
+discovers, enriches, scores            ──JSON──▶  lead_intelligence   (replica, read-only)
+leads.id  ("1320d1738b0db4a0")            sync    crm_leads.external_lead_id  (UNIQUE)
+                                                  ├─ contacts, activities, tasks
+                                                  ├─ opportunities → proposals
+                                                  └─ clients → contracts → payments
+```
+
+`leads.id` is a 16-character SHA-1 of the strongest identity the pipeline has — Google
+place id, else domain, else normalised name plus locality. It is stable across re-scrapes,
+which is what makes the sync idempotent.
+
+**Why the research is copied rather than queried.** The pipeline's SQLite file lives on
+whichever machine ran the scrape; a serverless CRM cannot reach it. `lead_intelligence` is
+therefore a replica with exactly one writer — the sync, running as the service role. There
+is no INSERT, UPDATE or DELETE policy on that table for any CRM user, so "the sync owns
+this data" is enforced by row level security rather than by everyone remembering it.
+
+That boundary is why the decision-maker the pipeline discovers
+(`lead_intelligence.contact_name` / `contact_role` / `contact_source_url`) is *not* a
+`contacts` row. `contacts` is CRM state — people your team added, verified and possibly
+corrected — and a re-sync must never touch it. The discovered name is research: shown on
+the lead page with the role and the page it was read from, and promoted to a real contact
+by a human when it turns out to be right.
+
+The inverse holds too: **the sync never writes CRM state.** `crm_leads` rows are
+insert-only from the sync's point of view. A lead you moved to `won` stays `won` however
+many times it is re-scraped.
+
+---
+
+## Setup
+
+1. **Create the schema.** Apply every file in `supabase/migrations/` in filename order
+   to your Supabase project (SQL editor, or `supabase db push`).
+
+2. **Configure the app.** In `.env.local`:
+
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+   SUPABASE_SERVICE_ROLE_KEY=<service role key>   # server-side only, never NEXT_PUBLIC
+   ```
+
+3. **Create a user.** Supabase dashboard → Authentication → Add user. A `profiles` row is
+   created automatically by the `handle_new_auth_user` trigger, with role `sales`.
+
+4. **Promote yourself to owner** (the first account has to be done by hand, since only an
+   admin can change roles):
+
+   ```sql
+   update public.profiles set role = 'owner' where email = 'you@agency.com';
+   ```
+
+5. **Check it before you trust it.**
+
+   ```bash
+   npm run doctor
+   ```
+
+   Validates configuration, confirms all 18 tables exist and both migrations are
+   applied, finds an admin account, and — most importantly — verifies that a
+   signed-out request reads nothing. A misconfigured CRM and an empty one look
+   identical in the browser, so guessing between them costs more than the check.
+
+6. `npm run dev`, then sign in at `/login`.
+
+---
+
+## Deploying to production
+
+Full runbook in **[docs/deployment.md](deployment.md)**; the security review
+done before the first deploy is in **[docs/security-review.md](security-review.md)**.
+Scheduled work is in **[docs/vercel-crons.md](vercel-crons.md)**.
+
+```bash
+npm run preflight    # are these environment variables coherent? no I/O
+npm run doctor       # is this deployment healthy? talks to the database
+npm run backup       # logical export, secondary to Supabase PITR
+```
+
+`preflight` runs as part of `npm run verify` and exits non-zero on a
+configuration that will break production — a secret with a `NEXT_PUBLIC_`
+prefix, a Stripe key with no webhook secret, outreach with no site URL for its
+unsubscribe links, or the `service_role` key pasted into the anon slot.
+
+
+**Vercel**, Node runtime. Do not set `GITHUB_PAGES=true` — the CRM is
+server-rendered per request and cannot be statically exported; `npm run doctor`
+fails the build target check if it finds it.
+
+Environment variables, all three at Production scope:
+
+| Variable | Scope | Notes |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | browser + server | Safe to expose |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | browser + server | Safe to expose; RLS is what protects the data |
+| `SUPABASE_SERVICE_ROLE_KEY` | **server only** | Bypasses RLS entirely |
+| `LEAD_SYNC_SECRET` | server only | Optional; the import route 503s until it is set |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | **server only** | Optional; enables Google Calendar |
+| `CALENDAR_TOKEN_KEY` | **server only** | Required to connect a calendar; encrypts stored OAuth tokens |
+| `CALENDAR_SYNC_SECRET` | server only | Optional; enables scheduled syncing |
+| `CALENDAR_WEBHOOK_SECRET` / `CALENDAR_WEBHOOK_URL` | server only | Optional; enables Google push notifications |
+| `STRIPE_SECRET_KEY` | **server only** | Optional; enables invoices and retainers |
+| `STRIPE_WEBHOOK_SECRET` | **server only** | Required with Stripe — without it nothing is ever marked paid |
+| `STRIPE_CURRENCY` | server only | Defaults to `gbp` |
+| `RESEND_API_KEY` / `RESEND_WEBHOOK_SECRET` | **server only** | Optional; outreach email and reply detection |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | **server only** | Optional; outreach SMS |
+| `OUTREACH_RUN_SECRET` | server only | Optional; lets a scheduler drive the engine |
+| `NEXT_PUBLIC_SITE_URL` | browser + server | Base for unsubscribe links; required with outreach |
+
+The service-role key must never be given a `NEXT_PUBLIC_` name — that compiles
+it into the browser bundle and hands every visitor full database access.
+`npm run doctor` checks for exactly that and fails.
+
+Run the preflight against production once deployed:
+
+```bash
+vercel env pull .env.production.local
+env $(grep -v '^#' .env.production.local | xargs) npm run doctor
+```
+
+### Sessions
+
+`src/middleware.ts` refreshes the Supabase access token on every CRM request and
+redirects signed-out visitors to `/login?next=…`. Without it, tokens expire after
+about an hour and users are silently logged out: Server Components cannot write
+cookies, so nothing else in the App Router can persist a refreshed token.
+
+It runs on the CRM paths and `/login` only. `POST /api/crm/sync-leads` is
+deliberately excluded — it authenticates with a shared secret, not a session.
+
+---
+
+## Importing leads
+
+Run the pipeline as usual, export JSON, then sync:
+
+```bash
+python lead_pipeline/pipeline.py --niche invisalign_dental_practices \
+  --location "Newcastle upon Tyne" --radius 25 --format json --output leads.json
+
+npm run sync:leads -- --file leads.json --min-score 55
+```
+
+Useful flags: `--dry-run` (parse and map, write nothing — prints the first mapped row),
+`--limit n`, `--stage ready_for_outreach` for the stage new leads land in.
+
+Re-running is safe and expected. A second run reports:
+
+```
+LEAD SYNC COMPLETE
+  Received:            120
+  CRM leads created:   14
+  Already in CRM:      106 (stage and history preserved)
+  Intelligence synced: 120
+```
+
+### Automating it later
+
+`POST /api/crm/sync-leads/` accepts the same JSON document. Authenticate with the shared
+secret in `LEAD_SYNC_SECRET`:
+
+```bash
+curl -X POST "$SITE/api/crm/sync-leads/?min_score=55" \
+  -H "Authorization: Bearer $LEAD_SYNC_SECRET" \
+  -H 'content-type: application/json' \
+  --data @leads.json
+```
+
+The route returns 503 until `LEAD_SYNC_SECRET` is set — it fails closed rather than
+defaulting open. Note the trailing slash: `trailingSlash: true` in `next.config.mjs` means
+the unslashed path answers with a 308 redirect.
+
+---
+
+## Roles and permissions
+
+| Role | Read | Write leads/activities | Manage clients & payments | Change roles |
+| --- | --- | --- | --- | --- |
+| `owner` | ✓ | ✓ | ✓ | ✓ |
+| `admin` | ✓ | ✓ | ✓ | ✓ |
+| `sales` | ✓ | ✓ | ✓ | — |
+| `account_manager` | ✓ | ✓ | ✓ | — |
+| `viewer` | ✓ | — | — | — |
+
+Enforced by four SECURITY DEFINER helpers used in every policy: `crm_role_of()`,
+`crm_is_member()`, `crm_is_admin()`, `crm_can_write()`. A deactivated profile
+(`is_active = false`) is not a member, so revoking access is one column update.
+
+### What the UI can write
+
+Full create/edit/delete: **contacts, tasks, appointments, opportunities, clients, notes,
+contracts, proposals, documents, outreach sequences and steps**.
+Create and edit are open to any writing role; **delete is admin-only**, matching
+`crm_is_admin()` in RLS — so the delete control renders for owners and admins
+only, rather than offering a button the database refuses.
+
+Two derived fields are never entered by hand, because a second field that can
+disagree with the first is a reporting bug waiting to happen:
+
+- `tasks.completed_at` follows `status`
+- `opportunities.won_at` / `lost_at` follow `stage` (and an existing date is kept
+  when a closed deal is edited, so "won last March" does not drift to today)
+
+Two more, added with contracts and proposals:
+
+- `contracts.signed_at` follows the status. Expired and terminated keep the date
+  — a contract that ran out was still signed — and only draft or sent clear it.
+- `proposals` stamps `sent_at`, `viewed_at` and `accepted_at` cumulatively, so a
+  proposal that was sent, then viewed, then accepted ends up with all three.
+  Proposal versions and outreach step numbers are derived, not typed.
+
+Wall-clock times entered in a form are interpreted in `Europe/London` unless the
+record carries its own zone, as appointments do. The offset is looked up rather
+than assumed: 14:00 in London is 14:00Z in January and 13:00Z in June.
+
+### The sales workflow
+
+Five transitions move a deal, and each one touches several tables at once:
+
+| Action | Writes |
+| --- | --- |
+| Lead → Opportunity | `opportunities` + `crm_leads.pipeline_stage` + `activities` |
+| Log a call | `activities` + `crm_leads.next_action` + `opportunities.next_action` + `tasks` |
+| Proposal sent | `proposals` + `opportunities` + `crm_leads` + `activities` |
+| Won → Client | `opportunities` + `clients` + `contracts` + `crm_leads` + `activities` |
+| Lost | `opportunities` + `crm_leads` + `activities` |
+
+**PostgREST cannot send a transaction.** Four sequential REST calls can fail
+halfway and leave a won opportunity with no client, or a client whose lead is
+still sitting in `sales_call`. So each transition is a single plpgsql function
+in `20260818_sales_workflow.sql`, called through one `rpc()`
+(`src/lib/crm/workflow.ts`) — it either happens completely or not at all.
+
+Those functions are **SECURITY INVOKER**, so every statement inside is still
+checked by the same RLS policies a direct write would hit. The transaction buys
+atomicity, not privilege. As DEFINER they would hand every signed-in user the
+ability to create clients.
+
+Rules the database enforces, rather than the form:
+
+- **Stages only move forward.** `crm_stage_rank()` ranks the ladder explicitly
+  — the enum's own order would put `lost` above `won`. A late-logged discovery
+  call cannot drag a lead back out of `negotiation`, and a closed lead is never
+  silently reopened.
+- **A lost deal needs a reason.** "Lost" with no reason is the least useful row
+  a CRM can hold.
+- **A lead with another live deal stays open** when one of its deals is lost.
+- **A deal that already became a client cannot be marked lost** — that would
+  leave the account with nothing behind it. It raises and says to cancel the
+  client instead.
+- **Winning twice returns the same client.** Double-submitting the form is safe.
+- Workflow bookkeeping is logged as `direction = 'internal'`, so it cannot trip
+  `halt_outreach_on_inbound_reply` and claim the lead replied. Marking a
+  proposal sent logs `outbound`, because a document really did go out.
+
+Creating an opportunity from `/opportunities` goes through the same transaction
+as converting from a lead page. Two creation paths with different side effects
+is how a board ends up disagreeing with the forecast, so there is no plain
+`createOpportunity` in `mutations.ts` at all.
+
+**Nothing here sends anything.** "Proposal sent" records that a human sent a
+document; the CRM does not deliver it.
+
+### The sales call workspace
+
+`/leads/[id]/call` is a page to have the call from. The pipeline's findings are
+on the left, arranged as things to say — strengths first, then the gaps that
+are costing them money — and the notes, outcome and follow-up are on the right
+in one form that saves as one transaction. Notes saved without the follow-up is
+the exact failure a follow-up exists to prevent.
+
+### Google Calendar
+
+Optional. Left unconfigured, appointments live in the CRM alone and the
+calendar page says so — an unconfigured deployment, a disconnected account, a
+revoked token and a genuinely empty week otherwise all render the same list of
+nothing.
+
+**Setting it up.** In the Google Cloud console: enable the Google Calendar API,
+create an OAuth client of type *Web application*, and register
+`https://<your-host>/api/crm/calendar/callback` as an authorised redirect URI.
+Then:
+
+```
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+CALENDAR_TOKEN_KEY=$(openssl rand -base64 32)
+```
+
+Each user connects their own Google account from `/calendar`. Connections are
+per person, not per agency: appointments belong to whoever is running the call,
+and one shared account would put every rep's day in the same diary.
+
+**Where the tokens live.** `calendar_credentials` is a separate table from
+`calendar_accounts` because RLS is row-level — there is no way to let someone
+read their own connection's email address while hiding its refresh token if the
+two share a row. That table has RLS enabled and **no policies at all**, so
+PostgREST returns nothing to anon, to authenticated, and to every CRM role
+including owner. Only the service-role client, server-side, can reach it. The
+values are also AES-256-GCM encrypted by the application before storage, so a
+database backup on its own is not a set of live Google credentials.
+
+`calendar_accounts` has SELECT and DELETE policies — see your own connection,
+disconnect it — and deliberately no INSERT or UPDATE policy. A connection can
+only be created by the OAuth callback after Google has actually authenticated
+the user, so the UI cannot assert a connection that does not exist.
+
+Rotating `CALENDAR_TOKEN_KEY` makes every stored token unreadable, and every
+calendar has to be reconnected. The error says so rather than failing obscurely.
+
+**What syncs, and which way.** A run does three things in order: drain
+deletions, push local edits, then pull remote changes — so a deleted
+appointment cannot be re-imported, and the pull sees the calendar as it now is.
+
+| Change | Result |
+| --- | --- |
+| Book or edit an appointment | Event created or updated in Google |
+| Delete an appointment | Event removed from Google |
+| Move an event in Google | Appointment updated in the CRM |
+| Delete an event in Google | Appointment marked cancelled |
+| Create an event in Google | Imported as an appointment |
+
+Whether an edit needs pushing is decided by a **database trigger**, not
+application code — in application code it would be one forgotten call away from
+a calendar that quietly stops matching. Changing the time, title, status or
+attendees marks the row `pending`; writing `meeting_notes` does not, because
+Google never saw them.
+
+Conflicts compare Google's `updated` against the CRM's `updated_at`, and ties
+go to the CRM. A local edit that has not been pushed yet always wins, because
+it is about to go out. A remote *cancellation* is the one thing applied
+regardless of timestamps: an event deleted in Google is not coming back, and
+leaving it live here sends someone to a meeting that is not happening.
+
+A deletion is queued by a trigger into `calendar_deletions` before the
+appointment row disappears, because by the time the sync runs the
+`external_event_id` it needs is gone.
+
+**Google Meet.** Tick "Create a Google Meet link" on an appointment and Google
+mints one when the event syncs. The link is only ever requested once — editing
+an appointment that already has one does not ask for another, because a second
+link would invalidate the one already in everybody's invitation.
+
+**Nothing is emailed unless you say so.** Adding an attendee to a Google event
+makes Google email them, so every write goes out with `sendUpdates=none` unless
+that appointment's "Let Google email the attendees" box is ticked. The default
+is off in the form *and* in the database column, and there is a schema
+assertion for it. This is the same rule the pipeline follows: the CRM records
+that a meeting exists; it does not contact anybody on its own.
+
+**Keeping it in sync.** The in-app "Sync now" button always works. For
+scheduled syncing, set `CALENDAR_SYNC_SECRET` and call the endpoint on a
+schedule (Vercel Cron, GitHub Actions, anything):
+
+```bash
+curl -X POST "$SITE/api/crm/calendar/sync" -H "Authorization: Bearer $CALENDAR_SYNC_SECRET"
+```
+
+It fails closed: without the secret set, that route answers 503 rather than
+running unauthenticated.
+
+Google push notifications are supported and optional. Set
+`CALENDAR_WEBHOOK_SECRET` and a publicly reachable `CALENDAR_WEBHOOK_URL` and
+the sync opens a channel, renewing it before Google expires it. Notifications
+carry no data — they only mean "list again" — and they can be dropped, so the
+poll remains the thing that guarantees convergence. The channel token is an
+HMAC of the channel id, so a stranger who finds the webhook URL cannot make the
+CRM do anything.
+
+**The 410.** Google expires incremental sync cursors and answers `410 GONE`.
+The only correct response is to discard the cursor and pull the window again;
+getting it wrong means a calendar that silently stops updating. That path is
+implemented and tested.
+
+### Stripe
+
+Optional. Left unconfigured the CRM records no billing and the payments page
+says so.
+
+**Setting it up.** Add `STRIPE_SECRET_KEY`, then in the Stripe dashboard add a
+webhook endpoint pointing at `https://<your-host>/api/crm/stripe/webhook` and
+put its signing secret in `STRIPE_WEBHOOK_SECRET`. Subscribe it to at least:
+
+```
+invoice.created  invoice.finalized  invoice.sent  invoice.paid
+invoice.payment_failed  invoice.marked_uncollectible  invoice.voided
+customer.subscription.created  customer.subscription.updated
+customer.subscription.deleted  charge.refunded
+```
+
+Use a test key until you mean it. The payments page shows which mode is in use.
+
+#### Stripe is the source of truth
+
+`payments` and `subscriptions` have a SELECT policy and **no INSERT, UPDATE or
+DELETE policy for any role — owner included**. That is not an oversight, it is
+the security model: nothing a browser can send marks an invoice paid. The only
+writer is the webhook handler, running server-side as the service role after
+Stripe's signature has been verified. There is a schema assertion that an owner
+attempting `update payments set status = 'paid'` changes nothing.
+
+What the UI *can* do is ask Stripe for something — draft an invoice, finalise
+it, email it, void it, start or cancel a retainer. Those are API calls, and the
+row that results is written from Stripe's own response through the same
+`recordInvoice` the webhook uses. No CRM row is ever built from a form field.
+Recording eagerly is not a shortcut past the webhook; the webhook still arrives
+and is still authoritative. It exists so pressing "create invoice" shows you an
+invoice instead of an empty table.
+
+If an invoice stays on pending after a client has paid, the webhook is not
+being delivered. That is a Stripe dashboard problem, not a missing button.
+
+#### Webhooks are not a queue
+
+Three failure modes, all handled and all tested:
+
+- **Replays.** Stripe re-delivers on any non-2xx and on its own schedule.
+  `stripe_events` is an idempotency ledger keyed on the event id; the insert
+  *is* the lock, so two concurrent deliveries race on the primary key rather
+  than both winning. No payloads are stored — they would be the most sensitive
+  data in the database, for debugging value the Stripe dashboard already gives.
+- **Out-of-order delivery.** `invoice.paid` can arrive before
+  `invoice.finalized`. Every mirrored row carries the `created` time of the last
+  event applied, and an older event is ignored rather than rolling a settled
+  invoice back to open.
+- **Unknown customers.** An invoice raised in the Stripe dashboard for someone
+  who is not a CRM client is still recorded, with a null `client_id`. Money that
+  exists but is invisible is worse than money that is unattributed.
+
+The route returns 400 for an unverifiable request (never retried) and 500 for a
+genuine event that failed while being applied (so Stripe brings it back).
+Returning 200 on failure would lose the event silently.
+
+#### Money
+
+Stripe counts in the smallest unit of the currency: `1500` is £15.00 in GBP and
+¥1500 in JPY. `src/lib/billing/money.ts` owns that conversion, including the
+zero-decimal currency list and two floating-point traps that each cost real
+money — `Math.trunc(19.99 * 100)` undercharging by a penny, and
+`Math.round(1.005 * 100)` losing a half penny downwards.
+
+MRR normalises every interval to a month, so a £12,000 yearly plan counts as
+£1,000 and not £12,000. `past_due` is included: the client has not cancelled and
+the money is still expected, and excluding it makes MRR jump every time a card
+is retried. Collected is net of refunds — a refunded invoice is still `paid` at
+Stripe, so reading only the status would keep counting money that went back.
+
+#### Nothing is emailed unless you say so
+
+Drafting an invoice does not send it, and finalising does not either —
+finalising gives it a number and a payment link. "Email it to the client" is a
+separate, explicit control, and it is the only thing in this CRM that sends a
+message to anybody. Starting a retainer is the one standing exception: Stripe
+raises and emails an invoice each cycle, which is what a retainer is, and the
+form says so before you press it.
+
+Cancelling a retainer ends it at the period boundary by default. Immediate
+cancellation takes away service the client has already paid for, so it is the
+explicit choice.
+
+### Outreach
+
+This is the only part of the CRM that contacts strangers, and it is built
+around that fact.
+
+**Sending is off until somebody turns it on.** `outreach_settings.sending_enabled`
+defaults to `false`, and only an owner or admin can change it. Applying the
+migration to a database full of scraped leads does nothing; pointing a cron job
+at the run endpoint does nothing. There is a schema assertion for the default,
+and an engine test that a run with the switch off does not even look for due
+enrolments.
+
+**Enrolment is a person's decision.** Nothing bulk-enrols a list. A human opens
+a lead, picks a sequence, and the enrolment records who did it (`enrolled_by`).
+
+#### Setting it up
+
+```
+RESEND_API_KEY=…              # email
+RESEND_WEBHOOK_SECRET=whsec_… # replies, bounces, complaints
+TWILIO_ACCOUNT_SID=…          # SMS (optional)
+TWILIO_AUTH_TOKEN=…
+NEXT_PUBLIC_SITE_URL=https://crm.youragency.com
+```
+
+Webhook endpoints to register:
+
+| Provider | Endpoint | Carries |
+| --- | --- | --- |
+| Resend | `/api/crm/outreach/email` | delivery events and inbound replies |
+| Twilio | `/api/crm/outreach/sms` | inbound texts, including STOP |
+
+Then set the sender identity, caps and window on `/outreach`, read the
+templates, and only then switch sending on.
+
+Driving the engine on a schedule:
+
+```bash
+curl -X POST "$SITE/api/crm/outreach/run" -H "Authorization: Bearer $OUTREACH_RUN_SECRET"
+```
+
+Fails closed — without the secret the scheduled path answers 503 rather than
+running unauthenticated.
+
+#### The send gate
+
+Every message passes these, in this order, and the first objection is recorded
+as the reason:
+
+1. sending switched on at all
+2. **the address is not suppressed** — consent before convenience
+3. the lead is not `do_not_contact`, `lost`, `disqualified` or `won`
+4. there is an address for the channel, and a sender configured
+5. the per-run and daily caps
+6. the sending window
+
+Caps and windows are *transient* — the enrolment keeps its place and goes out
+next run. Suppression and a missing address are *settled*: the sequence stops
+rather than retrying forever.
+
+#### Suppression
+
+`suppressions` is the most important table in the migration. It is written by
+the unsubscribe link, by a reply that reads as an opt-out, by a bounce, by a
+spam complaint, and by anyone on the team who is asked in person. It is checked
+on the send path via `crm_is_suppressed()`, not as a filter on a list
+somewhere.
+
+It is stored independently of any lead: **deleting a lead does not resurrect
+permission to email them**, and there is a test for exactly that. Addresses are
+lower-cased and phone numbers stripped to digits on the way in, so the same
+person written three ways suppresses once. Any writer can add an entry;
+removing one is admin-only, because that is what puts an address back in the
+send path.
+
+#### Replies
+
+Reply detection does not stop sequences itself. The inbound webhook writes an
+inbound **activity**, and `halt_outreach_on_inbound_reply` — the trigger from
+the very first migration — stops every live enrolment and moves the lead to
+`replied`. One implementation of that rule, in the database, holding however
+the reply arrived.
+
+Opt-out detection reads only the reply's own words. Without stripping the
+quoted original, every reply would contain our own footer — including the word
+"Unsubscribe" — and every single replier would be opted out. It leans towards
+stopping: a false positive costs one prospect who has to be re-enrolled by
+hand, a false negative means emailing somebody who asked twice to be left
+alone.
+
+#### What goes out
+
+Templates use `{{first_name}}`-style placeholders. **An unresolved placeholder
+is a failure, not a blank** — a lead with no first name produces a skipped send
+with a reason, not "Hi ,". Every email carries an unsubscribe link, the sender
+name and a postal address, appended by the code rather than left to whoever
+wrote the template. Every SMS ends with "Reply STOP to opt out."
+
+Unsubscribe links carry an opaque per-enrolment token, never a lead id — a URL
+with a countable id would let anyone unsubscribe anyone. `GET` on that link
+shows a confirmation page and `POST` performs it, because corporate mail
+scanners fetch every URL in an incoming email and a GET that unsubscribed would
+opt out people who never saw the message. RFC 8058 one-click clients POST
+directly and are honoured immediately.
+
+#### Call steps
+
+A `call`, `linkedin` or `other` step is work for a person. The engine creates a
+task and advances the sequence; it does not dial anybody. Logging the call is
+the existing `crm_log_call` from Sprint 3.
+
+#### The send log
+
+`outreach_messages` records what was sent **and what was refused, with the
+reason**. "Why did this lead never get step 3" is the question an outreach tool
+is asked most often, and a log that only records successes cannot answer it.
+Both ledgers have no write policy for any CRM role.
+
+A unique index on `(lead_outreach_id, step_id)` means two overlapping engine
+runs race on the database rather than both emailing the same person.
+
+### Documents
+
+Files live in a **private** Supabase Storage bucket (`crm-documents`), created by
+`20260817_document_storage.sql`. Storage has its own RLS on `storage.objects`,
+entirely separate from the table policies, and the three object policies mirror
+the CRM's exactly: read for members, write for writers, delete for admins.
+Getting the row policy right and leaving the object policy open is the classic
+way to leak files while the database looks locked down.
+
+Pages link to `/api/crm/documents/[id]`, which resolves the row under the
+caller's session and redirects to a 60-second signed URL. Putting the signed URL
+in the page instead would leave a working credential in the HTML, in browser
+history and in any copied link.
+
+Uploads are capped at 25 MB and executables, scripts, HTML and SVG are refused —
+a file served from a signed URL is a stored-XSS vector aimed at whoever opens
+it.
+
+Three tables have **no write policy at all**:
+
+- `lead_intelligence` — written only by the sync.
+- `payments` — written only by the (not yet built) Stripe webhook. The frontend must never
+  be able to assert that money arrived.
+- `pipeline_stage_history` — written only by a trigger, so the audit trail cannot be
+  edited after the fact.
+
+---
+
+## Behaviour that lives in the database
+
+Put in triggers rather than application code, so it holds no matter which client writes:
+
+- **`record_pipeline_stage_change`** — every stage transition writes a
+  `pipeline_stage_history` row and stamps the matching funnel timestamp
+  (`first_contacted_at`, `first_replied_at`, `converted_at`). A no-op update writes
+  nothing.
+- **`halt_outreach_on_inbound_reply`** — logging an inbound activity stops any running
+  outreach sequence and advances the lead to `replied`, but only from
+  `qualified`/`ready_for_outreach`/`contacted`. A lead already at `proposal` or `won` never
+  regresses.
+- **`handle_new_auth_user`** — a new Supabase auth user gets a `profiles` row.
+- **`set_updated_at`** — on every mutable table.
+
+---
+
+## Routes
+
+| Route | Purpose |
+| --- | --- |
+| `/login` | Sign in (server action; no credentials in client JS) |
+| `/dashboard` | Today's tasks, upcoming appointments, weighted pipeline, recent leads |
+| `/leads` | Filterable list — stage, minimum score, company-name search |
+| `/leads/[id]` | CRM state, intelligence, timeline + CRUD for contacts, tasks, appointments, opportunities, notes |
+| `/leads/[id]/call` | Sales call workspace — talking points, call notes, follow-up and task in one save |
+| `/pipeline` | Board, one column per active stage |
+| `/tasks` | Open tasks grouped by urgency; create, edit, complete, reopen, delete |
+| `/calendar` | Appointments by day; book, edit, change status, delete; connect and sync Google Calendar |
+| `/opportunities` | Deals with value totals; create, edit, delete, manage proposals, mark sent, win into a client, mark lost |
+| `/outreach` | Sending switch, enrolments, send log, do-not-contact list, and the sequence templates |
+| `/clients` | Accounts; create |
+| `/clients/[id]` | Account edit, contracts, documents, payments, notes, tasks |
+| `/payments` | MRR, collected, outstanding and overdue; invoices and retainers, with Stripe controls |
+
+Every one is a server component reading through the session-scoped client, so RLS applies
+to the page as well as to the API.
+
+---
+
+## Deliberately not built
+
+Present in the schema so the data model does not need re-cutting later, but with no
+implementation and no UI:
+
+automated calling · voicemail drops · AI transcription · AI meeting summaries ·
+client portal · advanced analytics.
+
+Google Calendar and Meet were on this list until Sprint 4, Stripe until Sprint 5,
+and cold email, SMS and the outreach engine until Sprint 6. Those are now built.
+Everything else above is still schema only.
+
+The CRM still does not place a call. A `call` step in a sequence creates a task
+for a person; logging what was said is a human action.
+
+The CRM records that a call happened; it does not place one. Nothing in it sends a message
+to a lead.
+
+`/outreach` is the edge of this line and worth being precise about. You can write
+sequences, order their steps, set channels and delays, and draft the templates —
+that is the structure a sending engine would read, built now so the schema does
+not need re-cutting later. There is no enrol control and no send. `lead_outreach`
+shows enrolment state on a lead's page because
+`halt_outreach_on_inbound_reply` writes to it, not because anything here starts
+a sequence.
+
+---
+
+## Tests
+
+```bash
+npm run verify      # typecheck + unit tests + build, in that order
+npm run doctor      # configuration, schema and RLS against a live project
+
+# schema assertions against a real Postgres 16
+CRM_TEST_DATABASE_URL=postgres://postgres@localhost:5432/postgres npm run db:test
+```
+
+`supabase/tests/crm_schema_test.sql` covers structure, indexes on every foreign key,
+trigger behaviour, cascade rules, and RLS enforced under actual role impersonation —
+including that a viewer's INSERT is rejected and an anonymous request sees nothing. It
+found two genuine schema bugs while being written.
+
+`supabase/tests/sales_workflow_test.sql` covers the transition functions, all of it
+under an impersonated `authenticated` role because the functions are SECURITY INVOKER
+and running them as superuser would test something the application never does. It
+asserts forward-only stage movement, idempotent winning, the refusals, that a failed
+conversion leaves nothing behind, that a viewer is refused with
+`insufficient_privilege`, that `anon` holds no EXECUTE, and that none of the functions
+is SECURITY DEFINER.
+
+`supabase/tests/calendar_sync_test.sql` covers the calendar schema. The
+assertions that matter most are about what is *absent*: `calendar_credentials`
+and `calendar_deletions` have no policies, and a policy added later by accident
+would open them silently. It also checks that the token owner and an admin both
+read nothing from the credentials table, that the UI cannot fabricate a
+connection, that the dirty-marking trigger fires on the right columns only, and
+that a deleted appointment queues its Google event for removal.
+
+The Google integration itself is covered by unit tests against a fake
+transport (`src/lib/calendar/__tests__/`): the OAuth exchange, token refresh
+and revocation, the `sendUpdates=none` default, `conferenceDataVersion`,
+conflict resolution, cancellation handling and the 410 full-resync path. There
+is no live Google account in CI, so the request the code builds is what gets
+asserted.
+
+`supabase/tests/payments_test.sql` proves the rule the whole billing sprint
+rests on: an owner — the most privileged role there is — reading an invoice,
+then attempting to mark it paid, and the row not changing. It also covers the
+unique indexes that make a webhook replay harmless, and that deleting a retainer
+unlinks its invoices rather than destroying them.
+
+The Stripe integration is covered by unit tests against the real SDK with the
+socket replaced (`src/lib/billing/__tests__/`): money conversion, invoice and
+subscription mapping, the idempotency ledger, out-of-order events, refunds, and
+webhook signatures — including a tampered payload, a wrong secret and an
+expired timestamp, all verified with Stripe's own signer and verifier.
+
+`supabase/tests/outreach_test.sql` covers the engine schema. Since this is the
+first migration that lets the CRM contact a stranger, the assertions are mostly
+about restraint: sending is off by default, a suppression survives the lead
+being deleted, matching is case- and format-insensitive, neither ledger can be
+written from the UI, a step cannot be sent twice, and an inbound activity stops
+every live sequence.
+
+The engine itself is covered by unit tests against fake providers and an
+in-memory Postgres (`src/lib/outreach/__tests__/`): the gate ordering, the
+sending window across time zones and weekends, template refusal, the
+unsubscribe footer, opt-out detection against quoted replies, bounce
+suppression, and webhook signatures for both providers — tampered payload,
+wrong secret, expired timestamp.
+
+Run all five after any migration change.
